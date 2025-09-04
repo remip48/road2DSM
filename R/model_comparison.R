@@ -76,7 +76,6 @@ write_and_render_markdown <- function(run_models, # output from run_all_DSM
   # library(rmarkdown)
   # library(mgcv)
   # library(gratia)
-  # library(pelaDSM)
   # library(dplyr)
   # library(ggplot2)
   # library(ggnewscale)
@@ -86,7 +85,6 @@ write_and_render_markdown <- function(run_models, # output from run_all_DSM
   # library(units)
   # library(doParallel)
   # library(stringr)
-  # library(pelaDSM)
   # library(sf)
   # library(purrr)
   # library(rnaturalearth)
@@ -101,22 +99,20 @@ write_and_render_markdown <- function(run_models, # output from run_all_DSM
 
     knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE
     )
-    library(mgcv)
-    library(gratia)
-    library(pelaDSM)
-    library(dplyr)
-    library(ggplot2)
-    library(ggnewscale)
-    library(tidyr)
-    library(viridis)
-    library(knitr)
-    library(units)
-    library(doParallel)
-    library(stringr)
-    library(pelaDSM)
-    library(sf)
-    library(purrr)
-    library(rnaturalearth)
+    # library(mgcv)
+    # library(gratia)
+    # library(dplyr)
+    # library(ggplot2)
+    # library(ggnewscale)
+    # library(tidyr)
+    # library(viridis)
+    # library(knitr)
+    # library(units)
+    # library(doParallel)
+    # library(stringr)
+    # library(sf)
+    # library(purrr)
+    # library(rnaturalearth)
   })
   ##############
   obsn_chunk <- quote({
@@ -929,9 +925,9 @@ write_and_render_markdown <- function(run_models, # output from run_all_DSM
             registerDoParallel(cl)
 
             to_pred <- (foreach(d = dd,
-                                .packages = c("sf", "dplyr", "pelaDSM"),
+                                .packages = c("sf", "dplyr"),
                                 .noexport = ls()[!(ls() %in% c("dd", "GridDir", "effort_column", "log1p_trans", "covariates", "ls",
-                                                               "calibdata", "response"))]
+                                                               "calibdata", "response", "rescale2"))]
             ) %dopar% {
 
               f_d <- ls[which(d == dd)]
