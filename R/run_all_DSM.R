@@ -1,47 +1,47 @@
 run_all_DSM <- function (segdata_obs,
                          response = "ppho",
                          predictors,
-                         spatial_options = list(by = NULL, complexity = NA),
-                         soap = list(xt = NULL, knots = NULL),
+                         spatial_options = list(by = NULL, complexity = NA), # to use te(X, Y)
+                         soap = list(xt = NULL, knots = NULL), # to use soap
                          max_cor = 0.5,
-                         splines_bs = "cs",
-                         complexity = 4,
-                         use_loo = FALSE,
-                         random = NULL,
+                         splines_bs = "cs", # bs to use for the predictors. If spline_by is numeric and by_te = T, must be of length = length(spline_by) + 1. First element is used for bs of predictors, nexts are used for spline_by variables. You can set bs = "fs" or bs = "cs" for spline_by, which will be adapted correctly in the code.
+                         complexity = 4, # number of knots to use for the predictors.
+                         use_loo = FALSE, # if model selection is used based on LOO (TRUE) or on AIC (FALSE)
+                         random = NULL, # random effect to add.
                          offset_effort = NULL,
                          method = "REML",
                          nb_min_pred = 1,
                          nb_max_pred = 3,
-                         k = 5,
-                         intermediate_model_save = NULL,
+                         k = 5, # number of best models to return.
+                         intermediate_model_save = NULL, # if you want to save the fitted models before running LOO or AIC selection. Actually useful when you are not sure that LOO will run entirely without memory limit.
                          load_saved_models = F,
                          fit_all_once = T,
                          save_list_models = "models.rds",
-                         list_models_to_do = NULL,
+                         list_models_to_do = NULL, # if you dont want to just provide the list of models to do instead of the function determining it itself. Must be a list, each element (is a model to run) being a c() containing the predictors to use in this respective model.
                          force_one_off = NULL,
                          not_together = NULL,
                          force_include = NULL,
-                         fit_with_actual_data = T,
-                         use_select = F,
-                         spline_to_add = NULL,
-                         dataset_4correlation = NULL,
-                         data_valid_loo = NULL,
-                         list_knots = NULL,
+                         fit_with_actual_data = T, # if you want to also return the best models fitted with non-scaled data, in addition to the usual return with scaled data. Will increase the computation time, depending on your model complexity.
+                         use_select = F, # if you want to use select = T in mgcv::gam model fitting.
+                         spline_to_add = NULL, # any spline to add to the model. It will be added as such in the model and values wont be scaled.
+                         dataset_4correlation = NULL, # data to use to check predictor correlations. If NULL, use segdata_obs
+                         data_valid_loo = NULL, # if you want to use another dataset than the calibration one to calculate your model LOO value. Careful: values are not scaled (not implemented) so they must be scaled a priori, by first removing all the lines that have an NA in any of predictors columns
+                         list_knots = NULL, # xt argument in s() for covariates neither in no_by nor in no_by2
                          ncores = NULL,
                          outfile = "logs.txt",
-                         first_try = F,
-                         first_try_AIC = F,
-                         by_complexity = NULL,
-                         by_te = F,
-                         use_ti = F,
-                         all_in_te = F,
-                         list_knots2 = NULL,
-                         splines_by = NULL,
-                         no_by = NULL,
-                         no_by2 = NULL,
-                         month_spline_bs  = F,
+                         first_try = F, # if you want to pre-select the number of best models (based on AIC) to use before running LOO, so that computation is fast. Just define here the number of best models to select if so.
+                         first_try_AIC = F, # same but based on AIC difference compared to the best model: define here the maximum difference in AIC that you allow to select models that will run through the LOO.
+                         by_complexity = NULL, # if by_te, is the complexity of spline_by
+                         by_te = F, # to use te(predictors, spline_by) for each predictor no included in no_by
+                         use_ti = F, # if by_te, you can use here ti(predictors, spline_by) and add to the model ti(spline_by)
+                         all_in_te = F, # if you want to put all predictors in a single te(). Usually not more than 3 covariates possible.
+                         list_knots2 = NULL, # xt argument in s() for covariates in no_by2
+                         splines_by = NULL, # can be a factor or numeric, to fit te(predictors, spline_by) if by_te = T, or fitting s(predictors, spline_by) otherwise
+                         no_by = NULL, # predictors that should be used alone - i.e. without spline_by interaction
+                         no_by2 = NULL, # predictors that should be used only with 1 interaction - not too - in the case all_in_te = T
+                         month_spline_bs  = F, # if you want to add a spline for month, using bs = cc
                          likelihood = "negbin",
-                         fit_models = T,
+                         fit_models = T, # if you want to return the list of models to fit before to actually fit them, set fit_models = F
                          verbose = FALSE)
 {
   tab = T
@@ -290,7 +290,7 @@ run_all_DSM <- function (segdata_obs,
       }
     }
   }
-  cat(nrow(segdata_obs), "remained\n")
+  cat(nrow(segdata_obs), "data remained\n")
 
   if (!is.null(splines_by) & (!by_te & !use_ti)) {
     assertthat::assert_that(is.character(splines_by))
@@ -329,11 +329,13 @@ run_all_DSM <- function (segdata_obs,
     smoothers <- paste("s(", predictors, ", k = ", complexity,
                        ifelse(!is.null(splines_bs) & !is.na(splines_bs),
                               paste0(", bs = '", splines_bs, "'"),
-                              ""), ")", sep = "")
+                              ""),
+                       ")", sep = "")
   } else {
     if ((length(splines_bs) - 1) != ifelse(is.list(splines_by), length(splines_by[[1]]), length(splines_by))) {
-      cat("WARNING: Check that splines_bs and splines_by are appropriate.\n")
+      cat("WARNING: Check that splines_bs and splines_by are appropriate: splines_bs should have a length = length(splines_by) + 1.\n")
     }
+
     smoothers <- do.call("c",
                          map(predictors, function(p) {
                            if (by_te & !use_ti) {

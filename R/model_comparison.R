@@ -1,9 +1,9 @@
-write_and_render_markdown <- function(run_models, # output from run_all_DSM
+model_comparison <- function(run_models, # output from run_all_DSM
                                       seg_data, # segments used for run_all_DSM. Should not be an sf object.
                                       variable,
                                       effort_column,
                                       version_preds = as.character(lubridate::today()),
-                                      output_file = paste0(version_preds, "model_comparison"), # without extension, will be the name of html file
+                                      output_file = paste0(version_preds, "_model_comparison"), # without extension, will be the name of html file
                                       log1p_trans = NULL,
                                       grid_folder,
                                       static_grid, # grid with variables (static) that were not included in the extract_grids. Must have geometry, and use the exact same grid that the one used for extract_grid.
@@ -69,6 +69,7 @@ write_and_render_markdown <- function(run_models, # output from run_all_DSM
 
   if (all(!is.null(study_area))) {
     study_area <- study_area %>%
+      st_transform(crs = 3035) %>%
       group_by() %>%
       dplyr::summarise(do_union = F) %>%
       st_cast("MULTIPOLYGON")
