@@ -1,12 +1,41 @@
-Package: road2DSM
 Type: Package
+Package: road2DSM
 Title: What the Package Does (Title Case)
 Version: 0.1.0
 Author: Who wrote it
 Maintainer: The package maintainer <yourself@somewhere.net>
-Description: More about what it does (maybe more than one line)
-    Use four spaces when indenting paragraphs within the Description.
+Description: More about what it does (maybe more than one line) Use four
+    spaces when indenting paragraphs within the Description.
 License: MIT + file LICENSE
+Imports: 
+    abind,
+    assertthat,
+    cli,
+    doParallel,
+    dplyr,
+    foreach,
+    ggnewscale,
+    ggplot2,
+    gratia,
+    knitr,
+    loo,
+    lubridate,
+    MASS,
+    mgcv,
+    mvtnorm,
+    pelaDSM,
+    purrr,
+    qpcR,
+    raster,
+    rmarkdown,
+    rnaturalearth,
+    sf,
+    stringr,
+    tidyr,
+    tweedie,
+    units,
+    viridis,
+    WhatIf
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.3.1

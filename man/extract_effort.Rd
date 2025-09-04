@@ -8,6 +8,7 @@ extract_effort(
   effort,
   variable,
   file_set_directory,
+  try_to_combine_filetsets = T,
   n_cores = NULL,
   outfile = "log.txt"
 )

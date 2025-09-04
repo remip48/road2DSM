@@ -11,6 +11,7 @@
 #' @examples
 create_grid <- function(effort,
                         resolution,
+                        bbox = NULL,
                         sea = NULL,
                         country = NULL) {
   # library(stars)
@@ -18,6 +19,18 @@ create_grid <- function(effort,
   # library(raster)
 
   bb <- st_bbox(effort)
+
+  if (all(!is.null(bbox))) {
+    if (length(bbox) != 4) {
+      cat("bbox needs 4 elements: xmin, ymin, xmax, ymax. If you want to use the bbox of the effort for one of them, just let NA in it respective value.\n")
+    }
+
+    for (i in 1:4) {
+      if (!is.na(bbox[i])) {
+        bb[i] <- bbox[i]
+      }
+    }
+  }
 
   # bb
   # bb[1] <- floor(bb[1] / 1000) * 1000
@@ -42,12 +55,14 @@ create_grid <- function(effort,
       st_transform(crs = st_crs(effort)) %>%
       group_by() %>%
       dplyr::summarise(do_union = F) %>%
-      st_cast("MULTIPOLYGON")
+      st_cast("MULTIPOLYGON") %>%
+      # st_simplify() %>%
+      st_make_valid()
 
     grid5km <- grid5km %>%
-      dplyr::filter(c(st_intersects(.,
-                                    sea,
-                                    sparse = F))) %>%
+      # dplyr::filter(c(st_intersects(.,
+      #                               sea,
+      #                               sparse = F))) %>%
       st_intersection(.,
                       sea) %>%
       st_make_valid()
@@ -58,12 +73,14 @@ create_grid <- function(effort,
       st_transform(crs = st_crs(effort)) %>%
       group_by() %>%
       dplyr::summarise(do_union = F) %>%
-      st_cast("MULTIPOLYGON")
+      st_cast("MULTIPOLYGON") %>%
+      # st_simplify() %>%
+      st_make_valid()
 
     grid5km <- grid5km %>%
-      dplyr::filter(!c(st_intersects(.,
-                                     country,
-                                    sparse = F))) %>%
+      # dplyr::filter(!c(st_intersects(.,
+      #                                country,
+      #                               sparse = F))) %>%
       st_difference(.,
                       country) %>%
       st_make_valid()

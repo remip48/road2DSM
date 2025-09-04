@@ -31,19 +31,22 @@ upscale_grid <- function(grid,
                             crs = st_crs(grid)$proj4string
   ) %>%
     st_as_stars() %>%
-    st_as_sf()
+    st_as_sf() %>%
+    st_transform(crs = st_crs(grid))
 
   allgrid <- grid %>%
     group_by() %>%
     dplyr::summarise(do_union = F) %>%
-    st_cast("MULTIPOLYGON")
+    st_cast("MULTIPOLYGON") %>%
+    # st_simplify() %>%
+    st_make_valid()
 
   grid5km <- grid5km %>%
     dplyr::filter(c(st_intersects(.,
                                   allgrid,
                                   sparse = F))) %>%
-    st_intersection(.,
-                    allgrid) %>%
+    # st_intersection(.,
+    #                 allgrid) %>%
     st_make_valid()
 
   grid5km <- grid5km %>%

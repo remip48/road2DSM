@@ -96,13 +96,22 @@ extract_nc <- function(nc.path,
     return(out)
   }
 
-  nc_filesi <- map_dfr(1:nrow(nc_files), function(i) {
+  cl <- makeCluster(ifelse(is.null(n_cores),
+                           detectCores() * 2 / 4,
+                           n_cores))
+  registerDoParallel(cl)
+
+  # nc_filesi <- map_dfr(1:nrow(nc_files), function(i) {
+  nc_filesi <- do.call("rbind", foreach(i = 1:nrow(nc_files),
+                                        .packages = c("ncdf4", "stringr", "timeDate", "dplyr"),
+                                        .noexport = ls()[!(ls() %in% c("nc.path", "nc_files"))]
+  ) %dopar% {
     out <- nc_open(file.path(nc.path, nc_files$file[i]))
 
     names <- names(out$var)
     dim <- names(out$dim)
     time_var <- dim[str_detect(tolower(dim), "time")]
-    lt <- length(ncvar_get(out, get(time_var)))
+    lt <- length(ncvar_get(out, time_var))
     dt <- length(as.character(timeSequence(from = nc_files$date_start[i],
                                            to = nc_files$date_end[i],
                                            by = "day")))
@@ -115,8 +124,11 @@ extract_nc <- function(nc.path,
              dplyr::reframe(variable = names))
   })
 
+  stopCluster(cl)
+  gc()
+
   list_variable <- nc_filesi %>%
-    dplyr::select(variable %in% list_variable) %>%
+    dplyr::filter(variable %in% list_variable) %>%
     dplyr::select(file, variable) %>%
     distinct() %>%
     arrange(file) %>%
@@ -129,23 +141,29 @@ extract_nc <- function(nc.path,
                 distinct(),
               by = "variable",
               relationship = "one-to-many") %>%
-    dplyr::rename(file_id = file)
+    dplyr::rename(file_id = file) %>%
+    dplyr::select(-allfile)
 
   if (!("expr" %in% colnames(nc_files))) {
     nc_files$expr <- NA
   }
 
   predtype_ref <- nc_files %>%
-    dplyr::rename(file_set = file) %>%
+    dplyr::rename(file_id = file) %>%
+    left_join(list_variable %>%
+                dplyr::select(file_set, file_id), by = "file_id") %>%
     group_by(file_set) %>%
-    dplyr::reframe(predtype = str_remove_all(str_split_1(type, fixed(",")), " "),
-                   expr = unique(expr))
+    dplyr::reframe(predtype = str_remove_all(str_split_1(unique(type), fixed(",")), " "),
+                   expr = unique(expr)) %>%
+    as.data.frame()
 
   #############
-  ncinfoi_ref <- map_dfr(1:nrow(list_variable), function(i) {
-    return(list_variable[i, ] %>%
+  ncinfoi_ref <- map_dfr(unique(list_variable$variable), function(i) {
+    return(list_variable %>%
+             dplyr::filter(variable == i) %>%
              left_join(nc_files,
                        by = c("file_id" = "file")) %>%
+             dplyr::rename(nc.name = file_id) %>%
              dplyr::select(nc.name, variable, file_set, date_start, date_end) %>%
              arrange(date_start) %>%
              dplyr::mutate(period = 1:n() - 1))
@@ -156,14 +174,26 @@ extract_nc <- function(nc.path,
 
   ####
   for (f in unique(list_variable$file_set)) {
-    cat("Run NC", f, "\n")
-
-    ncinfoi <- ncinfoi_ref %>%
-      dplyr::filter(file_set == f)
+    pred.type <- predtype_ref %>%
+      dplyr::filter(file_set == f) %>%
+      pull(predtype)
 
     variable <- list_variable %>%
       dplyr::filter(file_set == f) %>%
-      pull(variable)
+      pull(variable) %>%
+      unique()
+
+    cat("Run NC", f, paste0("(", ifelse(length(variable) == 1,
+                                        "variable: ",
+                                        "variables: "),
+                            paste(variable,
+                                  collapse = ", "),
+                            ") as"),
+        paste(pred.type, collapse = ", "),
+        "\n")
+
+    ncinfoi <- ncinfoi_ref %>%
+      dplyr::filter(file_set == f)
 
     dates <- datesi %>%
       group_by(dates) %>%
@@ -200,64 +230,76 @@ extract_nc <- function(nc.path,
 
     ### Here we assume the grid remain the same among period, and that we extracting data on the same grid than the nc file
     if (!file.exists(paste0(nc.path, "/", f, ".shp"))) {
-      i <- first(match(infos_dim %>%
-                         dplyr::mutate(id = 1:n()) %>%
-                         group_by(nc.name, variable) %>%
-                         dplyr::mutate(n_dim = length(unique(dim))) %>%
-                         ungroup() %>%
-                         dplyr::slice_max(n_dim) %>%
-                         dplyr::slice_min(id) %>%
-                         pull(variable),
-                       ncinfoi$variable))
 
-      datafile <- paste(nc.path, ncinfoi$nc.name[i],sep="/")
+      datafile <- paste(nc.path, first(ncinfoi$nc.name[ncinfoi$file_set == f]),sep="/")
       nc.data <- nc_open(datafile)                          # Open matched .nc file and process data as needed
       namedims <- names(nc.data$dim)
       lat <- ncvar_get(nc.data, namedims[str_detect(namedims, "lat")])
       lon <- ncvar_get(nc.data, namedims[str_detect(namedims, "lon")])
 
-      data.var  <-  ncvar_get(nc.data,
-                              names(nc.data$var)[i],
-                              start = order_dim(infos_dim %>%
-                                                  dplyr::filter(variable == ncinfoi$variable[i] &
-                                                                  nc.name == ncinfoi$nc.name[i]),
-                                                lon = 1, lat = 1, depth = 1, time = 1),
-                              count = order_dim(infos_dim %>%
-                                                  dplyr::filter(variable == ncinfoi$variable[i] &
-                                                                  nc.name == ncinfoi$nc.name[i]),
-                                                lon = length(lon), lat = length(lat), depth = 1, time = 1), verbose=FALSE)
+      ref_c <- first(match(infos_dim %>%
+                             dplyr::mutate(id = 1:n()) %>%
+                             group_by(nc.name, variable) %>%
+                             dplyr::mutate(n_dim = length(unique(dim))) %>%
+                             ungroup() %>%
+                             dplyr::slice_max(n_dim) %>%
+                             dplyr::slice_min(id) %>%
+                             pull(variable),
+                           ncinfoi$variable))
 
-      if (dim(data.var)[1] == length(lon) & dim(data.var)[2] == length(lat)) {
-        if (lat[1] < lat[2]) {
-          data.var <- data.var[,length(lat):1]
-        }
-        data.var <- t(data.var)
-      }
+      data <- map_dfr(match(infos_dim %>%
+                              pull(variable) %>%
+                              unique(),
+                            ncinfoi$variable), function(i) {
 
-      newgrid <- raster(data.var,
-                        xmn = min(lon) - (sort(lon)[2] - sort(lon)[1]) / 2,
-                        xmx = max(lon) + (sort(lon)[length(lon)] - sort(lon)[length(lon) - 1]) / 2,
-                        ymn = min(lat) - (sort(lat)[2] - sort(lat)[1]) / 2,
-                        ymx = max(lat) + (sort(lat)[length(lat)] - sort(lat)[length(lat) - 1]) / 2,
-                        crs = "+proj=longlat +datum=WGS84") %>%
-        rasterToPolygons(., dissolve = F) %>%
-        st_as_sf()
+                              data.var  <-  ncvar_get(nc.data,
+                                                      ncinfoi$variable[i],
+                                                      start = order_dim(infos_dim %>%
+                                                                          dplyr::filter(variable == ncinfoi$variable[ref_c] &
+                                                                                          nc.name == ncinfoi$nc.name[ref_c]),
+                                                                        lon = 1, lat = 1, depth = 1, time = 1),
+                                                      count = order_dim(infos_dim %>%
+                                                                          dplyr::filter(variable == ncinfoi$variable[ref_c] &
+                                                                                          nc.name == ncinfoi$nc.name[ref_c]),
+                                                                        lon = length(lon), lat = length(lat), depth = 1, time = 1), verbose=FALSE)
 
-      cat("Check grid plotted: are lon/lat ok ?\n")
-      plot(newgrid)
+                              if (dim(data.var)[1] == length(lon) & dim(data.var)[2] == length(lat)) {
+                                if (lat[1] < lat[2]) {
+                                  data.var <- data.var[,length(lat):1]
+                                }
+                                data.var <- t(data.var)
+                              }
 
-      data <- newgrid %>%
-        st_transform(crs = 4326) %>%
-        dplyr::mutate(lon_cent = st_coordinates(st_centroid(.))[,1],
-                      lat_cent = st_coordinates(st_centroid(.))[,2]) %>%
-        group_by(lon_cent) %>%
-        dplyr::mutate(loni = lon[which.min(abs(unique(lon_cent) - lon))]) %>%
-        ungroup() %>%
-        group_by(lat_cent) %>%
-        dplyr::mutate(lati = lat[which.min(abs(unique(lat_cent) - lat))]) %>%
-        ungroup() %>%
-        dplyr::mutate(lon_cent = loni, lat_cent = lati) %>%
-        dplyr::select(-c(layer, loni, lati))
+                              newgrid <- raster(data.var,
+                                                xmn = min(lon) - (sort(lon)[2] - sort(lon)[1]) / 2,
+                                                xmx = max(lon) + (sort(lon)[length(lon)] - sort(lon)[length(lon) - 1]) / 2,
+                                                ymn = min(lat) - (sort(lat)[2] - sort(lat)[1]) / 2,
+                                                ymx = max(lat) + (sort(lat)[length(lat)] - sort(lat)[length(lat) - 1]) / 2,
+                                                crs = "+proj=longlat +datum=WGS84") %>%
+                                rasterToPolygons(., dissolve = F) %>%
+                                st_as_sf()
+
+                              data <- newgrid %>%
+                                st_transform(crs = 4326) %>%
+                                dplyr::mutate(lon_cent = st_coordinates(st_centroid(.))[,1],
+                                              lat_cent = st_coordinates(st_centroid(.))[,2]) %>%
+                                group_by(lon_cent) %>%
+                                dplyr::mutate(loni = lon[which.min(abs(unique(lon_cent) - lon))]) %>%
+                                ungroup() %>%
+                                group_by(lat_cent) %>%
+                                dplyr::mutate(lati = lat[which.min(abs(unique(lat_cent) - lat))]) %>%
+                                ungroup() %>%
+                                dplyr::mutate(lon_cent = loni, lat_cent = lati) %>%
+                                dplyr::select(-c(layer, loni, lati))
+
+                              data <- data %>%
+                                dplyr::filter(lon_cent >= lonmin, lon_cent <= lonmax, lat_cent >= latmin, lat_cent <= latmax)
+
+                              return(data)
+                            })
+
+      data <- data %>%
+        dplyr::filter(!duplicated(paste(lon_cent, lat_cent)))
 
       data_cent <- data.frame(x = data$lon_cent, y = data$lat_cent) %>%
         st_as_sf(coords = c("x", "y"), crs = 4326) %>%
@@ -270,14 +312,17 @@ extract_nc <- function(nc.path,
 
       rm(data_cent)
 
-      data <- data %>%
-        dplyr::filter(lon_cent >= lonmin, lon_cent <= lonmax, lat_cent >= latmin, lat_cent <= latmax)
+      cat("Check grid plotted: are lon/lat ok ?\n")
+      print(ggplot() +
+              geom_point(data = data, aes(x = lon_cent, y = lat_cent)))
+
+      ### HERE NEED TO KEEP ALL THE LON LAT UNIQUE
 
       new_grid <- data %>%
         dplyr::mutate(id = 1:n()) %>%
         st_cast()
 
-      nrow(new_grid)
+      # nrow(new_grid)
 
       new_grid <- new_grid %>%
         arrange(id)
@@ -295,10 +340,6 @@ extract_nc <- function(nc.path,
     data <- new_grid %>%
       st_drop_geometry() %>%
       dplyr::select(lon_cent, lat_cent, id)
-
-    pred.type <- predtype_ref %>%
-      dplyr::filter(file_set == f) %>%
-      pull(predtype)
 
     Predictor.name_ref <- variable
 
@@ -337,7 +378,7 @@ extract_nc <- function(nc.path,
       pull(expr) %>%
       unique()
 
-    if (is.null(n_cores) | is.na(n_cores)) {
+    if (is.null(n_cores)) {
       n_cores <- detectCores() * 2 / 4
       cat("Parallel processing with", n_cores, "cores will be used. Check that computed can handle it.\n\n",
           "In case of large files, few iterations might return an error due to memory limits. The function can then be re-run to re-do only these few iterations\n")
@@ -357,7 +398,6 @@ extract_nc <- function(nc.path,
 
                                                              if (file.exists(file_to_save)) {
                                                                return(NULL)
-                                                               return(res)
                                                              } else {
 
                                                                print(dt)
@@ -489,10 +529,7 @@ extract_nc <- function(nc.path,
                                                                                     lon = lon, lat = lat, depth = depth, time = 1:max(all_time.period)) %>%
                                                                            as.data.frame()
                                                                    ) %>%
-                                                                   # dplyr::mutate(lon = c(lon), lat = c(lat), depth = c(depth), time = c(time)) %>%
-                                                                   dplyr::filter(!is.na(data.var_ref)) %>%
-                                                                   # dplyr::filter(lat >= (min(data$lat_cent) - res_lat) & lat <= (max(data$lat_cent) + res_lat) &
-                                                                   #                 lon >= (min(data$lon_cent) - res_lon) & lon <= (max(data$lon_cent) + res_lon)) %>%
+                                                                   # dplyr::filter(!is.na(data.var_ref)) %>%
                                                                    dplyr::rename(!!paste0(pred) := data.var_ref)
 
                                                                  # ggplot() +
@@ -534,6 +571,20 @@ extract_nc <- function(nc.path,
                                                                  data.var_ref[, c] <- c(data.var_ref[, c])
                                                                }
 
+                                                               ####
+                                                               id_NA <- data.var_ref %>%
+                                                                 dplyr::mutate(id = 1:n()) %>%
+                                                                 dplyr::select(-c(lon, lat, t, d))
+
+                                                               id_NA <- id_NA %>%
+                                                                 dplyr::filter(rowSums(is.na(across(colnames(.)))) >= (ncol(id_NA) - 1)) %>%
+                                                                 pull(id)
+
+                                                               if (length(id_NA) > 0) {
+                                                                 data.var_ref <- data.var_ref[-id_NA, ]
+                                                               }
+                                                               ####
+
                                                                if (all(!is.na(expr)) & all(!is.null(expr))) {
                                                                  for (e in expr) {
                                                                    Predictor.name <- c(Predictor.name,
@@ -565,7 +616,7 @@ extract_nc <- function(nc.path,
                                                                numtimes <- max(all_time.period)
 
                                                                data.var_ref_t1 <- data.var_ref %>%
-                                                                 dplyr::filter(t == first(t)) %>%
+                                                                 dplyr::filter(t == dplyr::first(na.omit(t))) %>%
                                                                  dplyr::select(lon, lat, id_nc) %>%
                                                                  as.data.frame()
 
@@ -587,7 +638,7 @@ extract_nc <- function(nc.path,
                                                                # ggplot() +
                                                                #   geom_point()
 
-                                                               final <- map(all_pixel.radius, function(pixel.radius) {
+                                                               final <- lapply(all_pixel.radius, function(pixel.radius) {
 
                                                                  if (pixel.radius != all_pixel.radius[1] & !run_mean_SDspace) {
                                                                    return(NULL)
@@ -787,8 +838,10 @@ extract_nc <- function(nc.path,
                                                                  out_final <- data
 
                                                                  for (i in 1:length(outfinal)) {
-                                                                   out_final <- out_final %>%
-                                                                     left_join(outfinal[[i]], by = "id")
+                                                                   if (any(!is.null(outfinal[[i]]))) {
+                                                                     out_final <- out_final %>%
+                                                                       left_join(outfinal[[i]], by = "id")
+                                                                   }
                                                                  }
 
                                                                  return(out_final)
@@ -798,12 +851,14 @@ extract_nc <- function(nc.path,
                                                                out <- data
 
                                                                for (i in 1:length(final)) {
-                                                                 out <- out %>%
-                                                                   left_join(final[[i]] %>%
-                                                                               dplyr::select(id,
-                                                                                             all_of(colnames(final[[i]])[!(colnames(final[[i]]) %in%
-                                                                                                                             colnames(out))])),
-                                                                             by = "id")
+                                                                 if (any(!is.null(final[[i]]))) {
+                                                                   out <- out %>%
+                                                                     left_join(final[[i]] %>%
+                                                                                 dplyr::select(id,
+                                                                                               all_of(colnames(final[[i]])[!(colnames(final[[i]]) %in%
+                                                                                                                               colnames(out))])),
+                                                                               by = "id")
+                                                                 }
                                                                }
 
                                                                # ggplot() +
@@ -824,7 +879,6 @@ extract_nc <- function(nc.path,
     gc()
 
   }
-
 
   return(NULL)
 }

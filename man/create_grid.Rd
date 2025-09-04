@@ -4,7 +4,7 @@
 \alias{create_grid}
 \title{Title}
 \usage{
-create_grid(effort, resolution, sea = NULL, country = NULL)
+create_grid(effort, resolution, bbox = NULL, sea = NULL, country = NULL)
 }
 \arguments{
 \item{country}{}

@@ -9,6 +9,8 @@ extract_grid(
   variable,
   file_set_directory,
   writing_directory,
+  version_file = as.character(lubridate::today()),
+  try_to_combine_filetsets = T,
   dates,
   n_cores = NULL,
   outfile = "log.txt"
