@@ -436,8 +436,9 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                 colnames(data.var_ref)[ncol(data.var_ref)] <- last(Predictor.name)
               }
             }
-            if (any(!(floor(data$lat_cent*10^5)/10^5 %in% unique(floor(data.var_ref$lat*10^5)/10^5))) | any(!(floor(data$lon_cent*10^5)/10^5 %in%
-                                                                                                              unique(floor(data.var_ref$lon*10^5)/10^5)))) {
+            if (any(!(unique(paste(floor(data$lat_cent*10^5)/10^5,
+                                   floor(data$lon_cent*10^5)/10^5)) %in% unique(paste(floor(data.var_ref$lat*10^5)/10^5,
+                                                                                      floor(data.var_ref$lon*10^5)/10^5))))) {
               stop("lon or lat not in the data")
             }
             data.var_ref <- data %>% dplyr::mutate(lon_cent = floor(lon_cent*10^5)/10^5, lat_cent = floor(lat_cent*10^5)/10^5) %>%
