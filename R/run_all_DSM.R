@@ -1,18 +1,52 @@
-run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind", ncores = NULL, method = "REML", first_try = F,
-                                             by_complexity = NULL, by_te = F,
-                                             first_try_AIC = F, month_spline_bs  = F, outfile = "logs.txt",
-                                             predictors, likelihood = "negbin", esw = NULL, max_cor = 0.5, tab = T, corr = .5, no_by = NULL, all_in_te = F,
-                                             force_include = NULL, force_one_off = NULL, not_together = NULL, nb_min_pred = 1,
-                                             fit_all_once = T, load_saved_models = F, save_list_models = "models.rds", list_models_to_do = NULL,
-                                             nb_max_pred = 3, complexity = 4, spatial_options = list(by = NULL,
-                                                                                                     complexity = NA),
-                                             use_select = F, dataset_4correlation = NULL, fit_with_actual_data = T, use_ti = F, data_valid_loo = NULL,
-                                             list_knots = NULL, no_by2 = NULL, list_knots2 = NULL,
-                                             spline_to_add = NULL,
-                                             k = 5, splines_by = NULL, weighted = FALSE, splines_bs = "cs", fit_models = T,
-                                             random = NULL, soap = list(xt = NULL, knots = NULL), use_loo = FALSE, intermediate_model_save = NULL,
-                                             verbose = FALSE, parallel = TRUE)
+run_all_DSM <- function (segdata_obs,
+                         response = "ppho",
+                         predictors,
+                         spatial_options = list(by = NULL, complexity = NA),
+                         soap = list(xt = NULL, knots = NULL),
+                         max_cor = 0.5,
+                         splines_bs = "cs",
+                         complexity = 4,
+                         use_loo = FALSE,
+                         random = NULL,
+                         offset_effort = NULL,
+                         method = "REML",
+                         nb_min_pred = 1,
+                         nb_max_pred = 3,
+                         k = 5,
+                         intermediate_model_save = NULL,
+                         load_saved_models = F,
+                         fit_all_once = T,
+                         save_list_models = "models.rds",
+                         list_models_to_do = NULL,
+                         force_one_off = NULL,
+                         not_together = NULL,
+                         force_include = NULL,
+                         fit_with_actual_data = T,
+                         use_select = F,
+                         spline_to_add = NULL,
+                         dataset_4correlation = NULL,
+                         data_valid_loo = NULL,
+                         list_knots = NULL,
+                         ncores = NULL,
+                         outfile = "logs.txt",
+                         first_try = F,
+                         first_try_AIC = F,
+                         by_complexity = NULL,
+                         by_te = F,
+                         use_ti = F,
+                         all_in_te = F,
+                         list_knots2 = NULL,
+                         splines_by = NULL,
+                         no_by = NULL,
+                         no_by2 = NULL,
+                         month_spline_bs  = F,
+                         likelihood = "negbin",
+                         fit_models = T,
+                         verbose = FALSE)
 {
+  tab = T
+  weighted = FALSE
+
   rescale2 <- function (ynew, y = NULL)
   {
     assert_that(is.numeric(ynew) && is.vector(ynew) && length(ynew) >=
@@ -217,7 +251,6 @@ run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind",
 
   assert_that(is.logical(use_loo))
   assert_that(is.logical(verbose))
-  assert_that(is.logical(parallel))
   segdata_obs <- segdata_obs %>% units::drop_units()
   knots <- soap$knots
   # xt <- soap$xt
@@ -259,7 +292,6 @@ run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind",
   }
   cat(nrow(segdata_obs), "remained\n")
 
-  # obsdata <- obsdata %>% units::drop_units()
   if (!is.null(splines_by) & (!by_te & !use_ti)) {
     assertthat::assert_that(is.character(splines_by))
     assertthat::assert_that(segdata_obs %has_name% splines_by)
@@ -294,27 +326,14 @@ run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind",
   assertthat::assert_that(segdata_obs %has_name% predictors)
   X <- segdata_obs
   if (all(is.null(splines_by))) {
-
-    # if (all_in_te) {
-    # smoothers <- paste("s(", predictors, ", k = ", rep(complexity, length(n)),
-    #                    ifelse(!is.null(splines_bs) & !is.na(splines_bs),
-    #                           paste0(", bs = '", splines_bs, "'"),
-    #                           ""), ")", sep = "")
-    # } else {
     smoothers <- paste("s(", predictors, ", k = ", complexity,
                        ifelse(!is.null(splines_bs) & !is.na(splines_bs),
                               paste0(", bs = '", splines_bs, "'"),
                               ""), ")", sep = "")
-    # }
-    # }
   } else {
     if ((length(splines_bs) - 1) != ifelse(is.list(splines_by), length(splines_by[[1]]), length(splines_by))) {
       cat("WARNING: Check that splines_bs and splines_by are appropriate.\n")
     }
-    # smoothers <- paste("s(", predictors, ", k = ", complexity,
-    #                    ifelse(!is.null(splines_bs) & !is.na(splines_bs),
-    #                           paste0(", bs = '", splines_bs, "'"),
-    #                           ""), ", by = ", splines_by, ")", sep = "")
     smoothers <- do.call("c",
                          map(predictors, function(p) {
                            if (by_te & !use_ti) {
@@ -580,174 +599,30 @@ run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind",
     if (length(rem) > 0) {
       all_x <- all_x[-rem]
     }
-    ## first version
-
-    ########## second version
-    # fun_filter <- function(all_mods, force_include = NULL, force_one_off = NULL, not_together = NULL) {
-    #
-    #   if (!is.null(force_include)) {
-    #     check <- map_dbl(force_include, function(p) {
-    #       return(ifelse(p %in% all_mods, p, NA))
-    #     })
-    #     if (any(is.na(check))) {
-    #       # return(rep(NA, length(all_mods)))
-    #       return(NULL)
-    #     }
-    #   }
-    #
-    #   if (!is.null(force_one_off)) {
-    #     check <- do.call("c", map(1:length(force_one_off), function(l) {
-    #       out <- map_dbl(force_one_off[[l]], function(p) {
-    #         return(ifelse(p %in% all_mods, p, NA))
-    #       })
-    #       return(length(which(!is.na(out))))
-    #     }))
-    #
-    #     # if (any(check != 1)) {
-    #     if (any(check < 1)) {
-    #       # return(rep(NA, length(all_mods)))
-    #       return(NULL)
-    #     }
-    #   }
-    #
-    #   if (!is.null(not_together)) {
-    #     check <- do.call("c", map(1:length(not_together), function(l) {
-    #       out <- map_dbl(not_together[[l]], function(p) {
-    #         return(ifelse(p %in% all_mods, p, NA))
-    #       })
-    #       return(length(which(!is.na(out))))
-    #     }))
-    #
-    #     if (any(check > 1)) {
-    #       # return(rep(NA, length(all_mods)))
-    #       return(NULL)        }
-    #   }
-    #
-    #   return(all_mods)
-    # }
-    #
-    # lp <- 1:length(predictors)
-    # lpm <- length(predictors)
-    # all_x <- list(t(cbind(lp)))
-    #
-    # for (l in 2:nb_max_pred) {
-    #   # print(l)
-    #   if (ncol(all_x[[l-1]]) > 1000) {
-    #     n_cores <- ifelse(parallel, ifelse(is.null(ncores),
-    #                                        detectCores() - 1,
-    #                                        ncores), 1)
-    #     clust <- makeCluster(n_cores, outfile = outfile)
-    #     doParallel::registerDoParallel(clust)
-    #
-    #     all_xV <- all_x[[l-1]]
-    #
-    #     all_x[[l]] <- do.call("cbind",
-    #                           foreach(xv = 1:ncol(all_xV),
-    #                                   .noexport = ls()[!(ls() %in% c("lp", "lpm", "all_xV"))],
-    #                                   .packages = c("purrr")) %dopar% {
-    #                             x <- all_xV[, xv]
-    #                             if (max(x) == lpm) {
-    #                               return(NULL)
-    #                             } else {
-    #                               return(do.call("cbind", map(lp[lp > max(x)], function(xx) {
-    #                                 c(x, xx)
-    #                               })))
-    #                             }
-    #                           })
-    #
-    #     stopCluster(clust)
-    #     gc()
-    #   } else {
-    #     all_x[[l]] <- do.call("cbind", apply(all_x[[l-1]], 2, function(x) {
-    #       if (max(x) == lpm) {
-    #         return(NULL)
-    #       } else {
-    #         return(do.call("cbind", map(lp[lp > max(x)], function(xx) {
-    #           c(x, xx)
-    #         })))
-    #       }
-    #     }))
-    #   }
-    # }
-    #
-    # for (l in 2:nb_max_pred) {
-    #   # print(l)
-    #   if (ncol(all_x[[l]]) > 1000) {
-    #     n_cores <- ifelse(parallel, ifelse(is.null(ncores),
-    #                                        detectCores() - 1,
-    #                                        ncores), 1)
-    #     clust <- makeCluster(n_cores, outfile = outfile)
-    #     doParallel::registerDoParallel(clust)
-    #
-    #     all_xV <- all_x[[l]]
-    #
-    #     all_x[[l]] <- do.call("cbind", foreach(xv = 1:ncol(all_xV),
-    #                                            .noexport = ls()[!(ls() %in% c("fun_filter", "force_includei",
-    #                                                                           "force_one_offi", "not_togetheri",
-    #                                                                           "all_xV"))],
-    #                                            .packages = "purrr"
-    #                                            ) %dopar% {
-    #                                              x <- all_xV[, xv]
-    #                                              return(fun_filter(all_mods = x,
-    #                                                                force_include = force_includei, force_one_off = force_one_offi,
-    #                                                                not_together = not_togetheri))
-    #                                              })
-    #
-    #     stopCluster(clust)
-    #     gc()
-    #   } else {
-    #     all_x[[l]] <- do.call("cbind", apply(all_x[[l]], 2, function(x) {
-    #       fun_filter(all_mods = x, force_include = force_includei, force_one_off = force_one_offi, not_together = not_togetheri)
-    #     }))
-    #   }
-    # }
-    #
-    # all_x <- all_x[unique(c(1, nb_min_pred:nb_max_pred))]
-    ########## second version
-
-    # force_include = c("distance_construction", "distance_operation")
-    # force_one_off = list(c("mean_mean_closest_approach", "log_mean_ship_presence"))
-    # not_together = list(c("SST.mean", "TAV.mean"),
-    #                     c("SST.SDtime", "TAV.SDtime"),
-    #                     c("SST.SDspace", "TAV.SDspace"))
-    #
-    # force_include = do.call("c",
-    #                         lapply(force_include, function(f) {
-    #                           return(match(f, predictors))
-    #                         }))
-    # force_one_off = lapply(force_one_off, function(f) {
-    #   do.call("c", lapply(f, function(fo) {
-    #     return(match(fo, predictors))
-    #   }))
-    # })
-    # not_together = lapply(not_together, function(f) {
-    #   do.call("c", lapply(f, function(fo) {
-    #     return(match(fo, predictors))
-    #   }))
-    # })
 
     if (nb_max_pred == 1) {
       rm_combn <- c(rep(0, length(predictors) + 1))
     } else {
-      # list_NA <- map_dfr(predictors, function(p) {
-      #   # print(p)
-      #   NAs <- which(is.na(c(as.data.frame(X[, p]))[[1]]))
-      #   if (length(NAs) > 0) {
-      #     return(data.frame(pred = p,
-      #                       id = NAs))
-      #   } else {
-      #     return(NULL)
-      #   }
-      # })
-      #
-      # if (nrow(list_NA) == 0) {
-      #   list_NA <- data.frame(pred = NA, id = NA)
-      # }
 
-      if (!parallel) {
-        rm_combn <- lapply(all_x[-1], function(mat) {
-          sapply(1:ncol(mat), function(i) {
-            cat(i, "/", ncol(mat), "\n")
+      n_cores <- ifelse(parallel, ifelse(is.null(ncores),
+                                         detectCores() - 1,
+                                         ncores), 1)
+      clust <- makeCluster(n_cores, outfile = outfile)
+      doParallel::registerDoParallel(clust)
+
+      rm_combn <- list()
+      # rm_combn <- lapply(all_x[-1], function(mat) {
+      for (m in 2:length(all_x)) {
+        mat <- all_x[[m]]
+
+        if (ncol(mat) > 1000) {
+          print("PARALLELISE")
+          out <- do.call("c", foreach(i = 1:ncol(mat),
+                                      # .noexport = ls()[!(ls() %in% c("mat", "list_NA", "predictors", "X"))],
+                                      .noexport = ls()[!(ls() %in% c("mat", "rho"))],
+                                      .packages = "dplyr"
+          ) %dopar% {
+            cat(i, "IN PARALLEL /", ncol(mat), "\n")
 
             # rem <- unique(as.numeric(do.call("c", lapply(predictors[mat[, i]], function(p) {
             #   return(as.character(which(is.na(c(as.data.frame(X[, p]))[[1]]))))
@@ -764,76 +639,36 @@ run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind",
             # }
             #
             # diag(rho) <- 0
-
             return(max(abs(as.numeric(rho[mat[, i], mat[, i]]))))
           })
-        })
-      } else {
-        n_cores <- ifelse(parallel, ifelse(is.null(ncores),
-                                           detectCores() - 1,
-                                           ncores), 1)
-        clust <- makeCluster(n_cores, outfile = outfile)
-        doParallel::registerDoParallel(clust)
+        } else {
+          # print("SERIAL")
+          out <- sapply(1:ncol(mat), function(i) {
+            # cat(i, "/", ncol(mat), "\n")
 
-        rm_combn <- list()
-        # rm_combn <- lapply(all_x[-1], function(mat) {
-        for (m in 2:length(all_x)) {
-          mat <- all_x[[m]]
-
-          if (ncol(mat) > 1000) {
-            print("PARALLELISE")
-            out <- do.call("c", foreach(i = 1:ncol(mat),
-                                        # .noexport = ls()[!(ls() %in% c("mat", "list_NA", "predictors", "X"))],
-                                        .noexport = ls()[!(ls() %in% c("mat", "rho"))],
-                                        .packages = "dplyr"
-            ) %dopar% {
-              cat(i, "IN PARALLEL /", ncol(mat), "\n")
-
-              # rem <- unique(as.numeric(do.call("c", lapply(predictors[mat[, i]], function(p) {
-              #   return(as.character(which(is.na(c(as.data.frame(X[, p]))[[1]]))))
-              # }))))
-              # rem <- list_NA %>%
-              #   dplyr::filter(pred %in% predictors[mat[, i]]) %>%
-              #   pull(id) %>%
-              #   unique()
-              #
-              # if (length(rem) > 0) {
-              #   rho <- cor(X[-rem, predictors[mat[, i]]])
-              # } else {
-              #   rho <- cor(X[, predictors[mat[, i]]])
-              # }
-              #
-              # diag(rho) <- 0
-              return(max(abs(as.numeric(rho[mat[, i], mat[, i]]))))
-            })
-          } else {
-            # print("SERIAL")
-            out <- sapply(1:ncol(mat), function(i) {
-              # cat(i, "/", ncol(mat), "\n")
-
-              # rem <- unique(as.numeric(do.call("c", lapply(predictors[mat[, i]], function(p) {
-              #   return(as.character(which(is.na(c(as.data.frame(X[, p]))[[1]]))))
-              # }))))
-              # rem <- list_NA %>%
-              #   dplyr::filter(pred %in% predictors[mat[, i]]) %>%
-              #   pull(id) %>%
-              #   unique()
-              #
-              # if (length(rem) > 0) {
-              #   rho <- cor(X[-rem, predictors[mat[, i]]])
-              # } else {
-              #   rho <- cor(X[, predictors[mat[, i]]])
-              # }
-              #
-              # diag(rho) <- 0
-              return(max(abs(as.numeric(rho[mat[, i], mat[, i]]))))
-            })
-          }
-          # return(out)
-          rm_combn[[m-1]] <- out
+            # rem <- unique(as.numeric(do.call("c", lapply(predictors[mat[, i]], function(p) {
+            #   return(as.character(which(is.na(c(as.data.frame(X[, p]))[[1]]))))
+            # }))))
+            # rem <- list_NA %>%
+            #   dplyr::filter(pred %in% predictors[mat[, i]]) %>%
+            #   pull(id) %>%
+            #   unique()
+            #
+            # if (length(rem) > 0) {
+            #   rho <- cor(X[-rem, predictors[mat[, i]]])
+            # } else {
+            #   rho <- cor(X[, predictors[mat[, i]]])
+            # }
+            #
+            # diag(rho) <- 0
+            return(max(abs(as.numeric(rho[mat[, i], mat[, i]]))))
+          })
         }
-        # )
+        # return(out)
+        rm_combn[[m-1]] <- out
       }
+      # )
+      # }
       # rm_combn <- c(c(rep(0, length(predictors) + 1)), unlist(rm_combn))
       if (nb_min_pred == 1) {
         rm_combn <- c(c(rep(0, length(predictors))), unlist(rm_combn))
@@ -853,300 +688,6 @@ run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind",
     if (nb_min_pred > 1) {
       all_x <- all_x[-1]
     }
-    # stop("not working yet")
-    # lp <- 1:length(predictors)
-    # lf <- length(force_includei)
-    #
-    # if (!is.null(force_includei)) {
-    #   all_x <- list(NA)
-    #   for (i in 2:(length(force_includei) - 1)) {
-    #     all_x <- c(all_x, list(NA))
-    #   }
-    #   all_x <- c(all_x, list(matrix(sort(force_includei), nrow = length(force_includei), ncol = 1)))
-    #   i <- lf
-    # } else {
-    #   all_x <- list(matrix(lp, nrow = 1, ncol = length(predictors)))
-    #   i <- 1
-    # }
-    #
-    # # all_x <- list(lp)
-    #
-    # n_cores <- ifelse(parallel, ifelse(is.null(ncores),
-    #                                    detectCores() - 1,
-    #                                    ncores), 1)
-    # clust <- makeCluster(n_cores, outfile = "log.txt")
-    # doParallel::registerDoParallel(clust)
-    #
-    # while (i < nb_max_pred) {
-    #   i <- i + 1
-    #   print(i)
-    #
-    #   nbi <- max(c(nb_min_pred, i))  - lf
-    #
-    #   more <- do.call("c", #"cbind",
-    #                   # map(all_x[[i - 1]], function(p) { ## for each combinations
-    #                   (foreach(p = all_x[[i - 1]],
-    #                            .packages = c("purrr", "dplyr"),
-    #                            .noexport = ls()[!(ls() %in% c("lp", "not_togetheri", "rho", "force_includei", "force_one_offi", "lf", "nbi"))]
-    #                   ) %dopar% {
-    #                     # print(p)
-    #
-    #                     ## remove duplcates
-    #                     outi <- map(lp[lp > max(p)]# [!(lp %in% p)] #[lp > max(p)]
-    #                                 # lp[!(lp %in% p)]
-    #                                 , function(l) {return(c(p, l))}) ## create the new combinations
-    #
-    #                     return(#do.call("cbind",
-    #                       outi[map_lgl(outi, function(o) {
-    #                         (max(abs(rho[o[-length(o)], last(o)])) < .5)# &
-    #                         # (all(map_dbl(not_togetheri, function(t) {
-    #                         #   length(which(t %in% o))
-    #                         # }) < 2) | all(is.null(not_togetheri))) &
-    #                         # (sum(!(force_includei %in% o)) <= nbi
-    #                         #   # all(force_includei %in% o)
-    #                         #  | all(is.null(force_includei))) &
-    #                         # (sum(map_lgl(force_one_offi, function(t) {
-    #                         #   any(t %in% o)
-    #                         # }), na.rm = T) <= nbi
-    #                         # #   all(map_lgl(force_one_offi, function(t) {
-    #                         # #   any(t %in% o)
-    #                         # # }))
-    #                         # | all(is.null(force_one_offi)))
-    #                       })]#)
-    #                     )
-    #                   }))
-    #
-    #
-    #   # if (i %in% nb_min_pred:nb_max_pred) {
-    #   #   more <- do.call("c", #"cbind",
-    #   #                   # map(all_x[[i - 1]], function(p) { ## for each combinations
-    #   #                   (foreach(p = all_x[[i - 1]],
-    #   #                            .packages = c("purrr", "dplyr"),
-    #   #                            .noexport = ls()[!(ls() %in% c("lp", "not_togetheri", "rho", "force_includei", "force_one_offi"))]
-    #   #                   ) %dopar% {
-    #   #                     # print(p)
-    #   #
-    #   #                     ## remove duplcates
-    #   #                     outi <- map(lp[!(lp %in% p)] #[lp > max(p)]
-    #   #                                 # lp[!(lp %in% p)]
-    #   #                                 , function(l) {return(sort(c(p, l)))}) ## create the new combinations
-    #   #
-    #   #                     return(#do.call("cbind",
-    #   #                       outi[map_lgl(outi, function(o) {
-    #   #                         (max(abs(rho[o[-length(o)], last(o)])) < .5) &
-    #   #                           (all(map_dbl(not_togetheri, function(t) {
-    #   #                             length(which(t %in% o))
-    #   #                           }) < 2) | all(is.null(not_togetheri))) &
-    #   #                           (all(force_includei %in% o) | all(is.null(force_includei))) &
-    #   #                           (all(map_lgl(force_one_offi, function(t) {
-    #   #                             any(t %in% o)
-    #   #                           })) | all(is.null(force_one_offi)))
-    #   #                       })]#)
-    #   #                     )
-    #   #                   }))
-    #   # } else if (i >= length(force_includei)) {
-    #   #   more <- do.call("c", #"cbind",
-    #   #                   # map(all_x[[i - 1]], function(p) { ## for each combinations
-    #   #                   (foreach(p = all_x[[i - 1]],
-    #   #                            .packages = c("purrr", "dplyr"),
-    #   #                            .noexport = ls()[!(ls() %in% c("lp", "not_togetheri", "rho", "force_includei", "force_one_offi"))]
-    #   #                   ) %dopar% {
-    #   #                     # print(p)
-    #   #
-    #   #                     ## remove duplcates
-    #   #                     outi <- map(lp[!(lp %in% p)] #[lp > max(p)]
-    #   #                                 # lp[!(lp %in% p)]
-    #   #                                 , function(l) {return(sort(c(p, l)))}) ## create the new combinations
-    #   #
-    #   #                     return(#do.call("cbind",
-    #   #                       outi[map_lgl(outi, function(o) {
-    #   #                         (max(abs(rho[o[-length(o)], last(o)])) < .5) &
-    #   #                           (all(map_dbl(not_togetheri, function(t) {
-    #   #                             length(which(t %in% o))
-    #   #                           }) < 2) | all(is.null(not_togetheri))) &
-    #   #                           (all(force_includei %in% o) | all(is.null(force_includei)))
-    #   #                       })]#)
-    #   #                     )
-    #   #                   }))
-    #   # } else {
-    #   #   more <- do.call("c", #"cbind",
-    #   #                   # map(all_x[[i - 1]], function(p) { ## for each combinations
-    #   #                   (foreach(p = all_x[[i - 1]],
-    #   #                            .packages = c("purrr", "dplyr"),
-    #   #                            .noexport = ls()[!(ls() %in% c("lp", "not_togetheri", "rho", "force_includei", "force_one_offi"))]
-    #   #                   ) %dopar% {
-    #   #                     # print(p)
-    #   #
-    #   #                     ## remove duplcates
-    #   #                     outi <- map(lp[!(lp %in% p)] #[lp > max(p)]
-    #   #                                 # lp[!(lp %in% p)]
-    #   #                                 , function(l) {return(sort(c(p, l)))}) ## create the new combinations
-    #   #
-    #   #                     return(#do.call("cbind",
-    #   #                       outi[map_lgl(outi, function(o) {
-    #   #                         (max(abs(rho[o[-length(o)], last(o)])) < .5) &
-    #   #                           (all(map_dbl(not_togetheri, function(t) {
-    #   #                             length(which(t %in% o))
-    #   #                           }) < 2) | all(is.null(not_togetheri))) &
-    #   #                           ((any(map_lgl(force_one_offi, function(t) {
-    #   #                             any(t %in% o)
-    #   #                           })) | all(is.null(force_one_offi))) | (any(force_includei %in% o) | all(is.null(force_includei))))
-    #   #                       })]#)
-    #   #                     )
-    #   #                   }))
-    #   # }
-    #
-    #   all_x <- c(all_x, list(more))
-    #
-    #   gc()
-    # }
-    #
-    # stopCluster(clust)
-    # gc()
-    #
-    # if (length(all_x) > 1) {
-    #   for (i in 2:length(all_x)) {
-    #     all_x[[i]] <- do.call("cbind", all_x[[i]])
-    #   }
-    # }
-    #
-    # all_x <- all_x[nb_min_pred:nb_max_pred]
-    #
-    # # rem <- c() used previously
-    # # for (i in 1:length(all_x)) {
-    # #   if (all(is.na(all_x[[i]]))) {
-    # #     rem <- c(rem, i)
-    # #   }
-    # # }
-    # #
-    # # if (length(rem) > 0) {
-    # #   all_x <- all_x[-rem]
-    # # }
-    #
-    # # if (nb_max_pred == 1) { used previously
-    # #   rm_combn <- c(rep(0, length(predictors) + 1))
-    # # } else {
-    # #   list_NA <- map_dfr(predictors, function(p) {
-    # #     # print(p)
-    # #     NAs <- which(is.na(c(as.data.frame(X[, p]))[[1]]))
-    # #     if (length(NAs) > 0) {
-    # #       return(data.frame(pred = p,
-    # #                         id = NAs))
-    # #     } else {
-    # #       return(NULL)
-    # #     }
-    # #   })
-    # #
-    # #   if (nrow(list_NA) == 0) {
-    # #     list_NA <- data.frame(pred = NA, id = NA)
-    # #   }
-    # #
-    # #   if (!parallel) {
-    # #     rm_combn <- lapply(all_x[-1], function(mat) {
-    # #       sapply(1:ncol(mat), function(i) {
-    # #         cat(i, "/", ncol(mat), "\n")
-    # #
-    # #         # rem <- unique(as.numeric(do.call("c", lapply(predictors[mat[, i]], function(p) {
-    # #         #   return(as.character(which(is.na(c(as.data.frame(X[, p]))[[1]]))))
-    # #         # }))))
-    # #         rem <- list_NA %>%
-    # #           dplyr::filter(pred %in% predictors[mat[, i]]) %>%
-    # #           pull(id) %>%
-    # #           unique()
-    # #
-    # #         if (length(rem) > 0) {
-    # #           rho <- cor(X[-rem, predictors[mat[, i]]])
-    # #         } else {
-    # #           rho <- cor(X[, predictors[mat[, i]]])
-    # #         }
-    # #
-    # #         diag(rho) <- 0
-    # #         return(max(abs(as.numeric(rho))))
-    # #       })
-    # #     })
-    # #   } else {
-    # #     n_cores <- ifelse(parallel, ifelse(is.null(ncores),
-    # #                                        detectCores() - 1,
-    # #                                        ncores), 1)
-    # #     clust <- makeCluster(n_cores, outfile = "log.txt")
-    # #     doParallel::registerDoParallel(clust)
-    # #
-    # #     rm_combn <- list()
-    # #     # rm_combn <- lapply(all_x[-1], function(mat) {
-    # #     for (m in 2:length(all_x)) {
-    # #       mat <- all_x[[m]]
-    # #
-    # #       if (ncol(mat) > 1000) {
-    # #         print("PARALLELISE")
-    # #         out <- do.call("c", foreach(i = 1:ncol(mat),
-    # #                                     .noexport = ls()[!(ls() %in% c("mat", "list_NA", "predictors", "X"))],
-    # #                                     .packages = "dplyr"
-    # #         ) %dopar% {
-    # #           cat(i, "IN PARALLEL /", ncol(mat), "\n")
-    # #
-    # #           # rem <- unique(as.numeric(do.call("c", lapply(predictors[mat[, i]], function(p) {
-    # #           #   return(as.character(which(is.na(c(as.data.frame(X[, p]))[[1]]))))
-    # #           # }))))
-    # #           rem <- list_NA %>%
-    # #             dplyr::filter(pred %in% predictors[mat[, i]]) %>%
-    # #             pull(id) %>%
-    # #             unique()
-    # #
-    # #           if (length(rem) > 0) {
-    # #             rho <- cor(X[-rem, predictors[mat[, i]]])
-    # #           } else {
-    # #             rho <- cor(X[, predictors[mat[, i]]])
-    # #           }
-    # #
-    # #           diag(rho) <- 0
-    # #           return(max(abs(as.numeric(rho))))
-    # #         })
-    # #       } else {
-    # #         # print("SERIAL")
-    # #         out <- sapply(1:ncol(mat), function(i) {
-    # #           # cat(i, "/", ncol(mat), "\n")
-    # #
-    # #           # rem <- unique(as.numeric(do.call("c", lapply(predictors[mat[, i]], function(p) {
-    # #           #   return(as.character(which(is.na(c(as.data.frame(X[, p]))[[1]]))))
-    # #           # }))))
-    # #           rem <- list_NA %>%
-    # #             dplyr::filter(pred %in% predictors[mat[, i]]) %>%
-    # #             pull(id) %>%
-    # #             unique()
-    # #
-    # #           if (length(rem) > 0) {
-    # #             rho <- cor(X[-rem, predictors[mat[, i]]])
-    # #           } else {
-    # #             rho <- cor(X[, predictors[mat[, i]]])
-    # #           }
-    # #
-    # #           diag(rho) <- 0
-    # #           return(max(abs(as.numeric(rho))))
-    # #         })
-    # #       }
-    # #       # return(out)
-    # #       rm_combn[[m-1]] <- out
-    # #     }
-    # #     stopCluster(clust)
-    # #     gc()
-    # #     # )
-    # #   }
-    # #   # rm_combn <- c(c(rep(0, length(predictors) + 1)), unlist(rm_combn))
-    # #   if (nb_min_pred == 1) {
-    # #     rm_combn <- c(c(rep(0, length(predictors))), unlist(rm_combn))
-    # #   } else {
-    # #     rm_combn <- unlist(rm_combn)
-    # #   }
-    # # }
-    # # mlist <- function(n, y, predictors) {
-    # #   paste(y, apply(X = combn(predictors, n), MARGIN = 2,
-    # #                  paste, collapse = " + "), sep = paste(intercept,
-    # #                                                        "+", sep = " "))
-    # # }
-    #
-    # # if (nb_min_pred > 1) { ## used previously
-    # #   all_x <- all_x[-1]
-    # # }
   } else {
     remx <- do.call("c",
                     map(list_models_to_do, function(m) {
@@ -1168,9 +709,9 @@ run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind",
                       }
                     }))
 
-    cat(length(which(remx >= corr)), "models removed due to correlated variables\n")
+    cat(length(which(remx >= max_cor)), "models removed due to correlated variables\n")
 
-    list_models_to_do <- list_models_to_do[remx <= corr]
+    list_models_to_do <- list_models_to_do[remx <= max_cor]
 
     all_x <- list(do.call("cbind",
                           map(list_models_to_do, function(m) {
@@ -1207,7 +748,6 @@ run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind",
     splines_bs <- splines_bs
     complexity <- complexity
     return(do.call("c",
-                   # lapply(1:ncol(mat), function(i) {
                    (foreach(i = 1:ncol(mat),
                             .noexport = ls()[!(ls() %in% c("intercept", "r", "smoothers", "mat", "all_in_te", "predictors", "splines_bs", "complexity"))],
                             .packages = "dplyr"
@@ -1224,8 +764,8 @@ run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind",
 
   if (is.null(list_models_to_do)) {
     cat(length(all_mods), "models for", length(rm_combn), "correlations\n")
-    cat(length(which(rm_combn > corr)), "models removed due to correlated variables\n")
-    all_mods <- all_mods[rm_combn <= corr]
+    cat(length(which(rm_combn > max_cor)), "models removed due to correlated variables\n")
+    all_mods <- all_mods[rm_combn <= max_cor]
 
   }
 
@@ -1234,19 +774,7 @@ run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind",
 
   # all_mods <- all_mods[which(rm_combn < max_cor)] ## used previously
 
-  all_mods <- paste0(all_mods, "+ offset(I(log(", esw, ")))")
-
-  # saveRDS(all_mods, save_list_models)
-
-  # }
-  #   else {
-  #     all_mods <- readRDS(save_list_models)
-  #   }
-  # }
-
-  # cat("Models created", ifelse(!is.null(save_list_models),
-  #                              paste("and saved under", save_list_models, "\n"),
-  #                              ""))
+  all_mods <- paste0(all_mods, "+ offset(I(log(", offset_effort, ")))")
 
   if (weighted) {
     covariable <- predictors
@@ -1266,48 +794,11 @@ run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind",
                   length(all_mods)
     )
   }
-  # X$Sample.Label <- paste(X$Sample.Label, X$Seg, sep = "_")
-  # segdata_obs$Sample.Label <- paste(segdata_obs$Sample.Label,
-  #                                   segdata_obs$Seg, sep = "_")
-  # obsdata$Sample.Label <- paste(obsdata$Sample.Label, obsdata$Seg,
-  #                               sep = "_")
-  # if (response != "ind") {
-  #   writeLines("\t* Response variable is the number of observations")
-  #   obsdata$size <- 1
-  # }
-  # else {
-  #   writeLines("\t* Response variable is the number of individuals")
-  # }
-  # if (is.null(distFit) && is.null(esw)) {
-  #   stop("Must provide either a detection function as \"distFit\", or \"esw\"")
-  # # } else if (esw == "effort_km2") {
-  #
-  # } else {
-  #   if (!is.null(distFit)) {
-  #     writeLines("\t* Detection function provided")
-  #     esw <- NULL
-  #   } else {
-  #     if (length(esw) == nrow(segdata_obs)) {
-  #       writeLines("\t* esw provided for each segment")
-  #     } else {
-  #       esw <- esw[1]
-  #       writeLines(paste("\t* esw set to", esw, sep = " "))
-  #     }
-  #   }
-  # }
-  # if (!is.null(soap$xt) && !is.null(soap$knots)) {
-  #   parallel <- FALSE
-  # }
   my_dsm_fct <- function(x, tab = TRUE, segdata_obs, loo = FALSE, method,
                          bnd = soap$xt, knots = soap$knots, verbose = F) {
     if (verbose) {
       glue("\t\t* Fitting model with formula {x}\n")
     }
-    # model <- dsm(as.formula(all_mods[x]), ddf.obj = distFit,
-    #              strip.width = esw, segment.data = segdata_obs, observation.data = obsdata,
-    #              family = switch(likelihood, negbin = nb(), poisson = poisson(),
-    #                              tweedie = tw()), method = "REML", weights = w[,
-    #                                                                            x], knots = knots, drop.unused.levels = FALSE)
     test <- try({if (!is.null(knots)) {
       model <- mgcv::gam(as.formula(all_mods[x]),
                          data = segdata_obs,
@@ -1324,9 +815,6 @@ run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind",
                          drop.unused.levels = F,
                          family = "nb")
     }})
-
-    # summary(model)
-    # gratia::draw(model)
 
     if (all(class(test) != "try-error")) {
       if (loo) {
@@ -1383,308 +871,151 @@ run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind",
     print(paste0("Example 1: ", all_mods[1]))
 
     cat("\n", length(all_mods), "models to fit\n")
-    if (parallel) {
-      n_cores <- ifelse(parallel, ifelse(is.null(ncores),
-                                         detectCores() - 1,
-                                         ncores), 1)
-      clust <- makeCluster(n_cores, outfile = outfile)
-      doParallel::registerDoParallel(clust)
+    n_cores <- ifelse(parallel, ifelse(is.null(ncores),
+                                       detectCores() - 1,
+                                       ncores), 1)
+    clust <- makeCluster(n_cores, outfile = outfile)
+    doParallel::registerDoParallel(clust)
 
-      if (first_try != F | first_try_AIC != F) {
-        BAM_try <- foreach(x = 1:length(all_mods),
-                           .combine = rbind,
-                           .noexport = ls()[!(ls() %in% c("segdata_obs", "all_mods", "knots", "bnd", "method"))], # my_dsm_fct
-                           .packages = c("qpcR", "mgcv", "dplyr")
-        ) %dopar% {
-          # out <- my_dsm_fct(x, segdata_obs = segdata_obs, all_mods = all_mods)
-          cat(x, "MODELS IN PARALLEL /", length(all_mods), ":", all_mods[x], "\n")
+    if (first_try != F | first_try_AIC != F) {
+      BAM_try <- foreach(x = 1:length(all_mods),
+                         .combine = rbind,
+                         .noexport = ls()[!(ls() %in% c("segdata_obs", "all_mods", "knots", "bnd", "method"))], # my_dsm_fct
+                         .packages = c("qpcR", "mgcv", "dplyr")
+      ) %dopar% {
+        # out <- my_dsm_fct(x, segdata_obs = segdata_obs, all_mods = all_mods)
+        cat(x, "MODELS IN PARALLEL /", length(all_mods), ":", all_mods[x], "\n")
 
-          test <- try({if (!is.null(knots)) {
-            bnd <- bnd
-            model <- mgcv::bam(as.formula(all_mods[x]),
-                               data = segdata_obs,
-                               method = method,
-                               # drop.unused.levels = F,
-                               knots = knots,
-                               discrete = T,
-                               family = "nb")
-          } else {
-            model <- mgcv::bam(as.formula(all_mods[x]),
-                               data = segdata_obs,
-                               method = method,
-                               # drop.unused.levels = F,
-                               discrete = T,
-                               family = "nb")
-          }})
-          if (all(class(test) != "try-error")) {
-            if (FALSE) {
-              tab <- FALSE
-              beta <- mvtnorm::rmvnorm(1000, mean = model$coefficients,
-                                       sigma = model$Vp)
-              Z <- predict(model, newdata = model$model, off.set = model$offset,
-                           type = "lpmatrix")
-              mu <- exp(as.matrix(beta %*% t(Z)))
-              y <- model$model[[1]]
-              lppd = switch(likelihood, negbin = {
-                apply(mu, 1, function(iter) {
-                  w[, x] * dnbinom(y, size = model$family$getTheta(trans = TRUE),
-                                   mu = exp(model$offset) * iter, log = TRUE)
-                })
-              }, poisson = {
-                apply(mu, 1, function(iter) {
-                  w[, x] * dpois(y, lambda = exp(model$offset) *
-                                   iter, log = TRUE)
-                })
-              }, tweedie = {
-                apply(mu, 1, function(iter) {
-                  w[, x] * log(tweedie::dtweedie(y, xi = model$family$getTheta(trans = TRUE),
-                                                 mu = exp(model$offset) * iter, phi = model$sig2))
-                })
+        test <- try({if (!is.null(knots)) {
+          bnd <- bnd
+          model <- mgcv::bam(as.formula(all_mods[x]),
+                             data = segdata_obs,
+                             method = method,
+                             # drop.unused.levels = F,
+                             knots = knots,
+                             discrete = T,
+                             family = "nb")
+        } else {
+          model <- mgcv::bam(as.formula(all_mods[x]),
+                             data = segdata_obs,
+                             method = method,
+                             # drop.unused.levels = F,
+                             discrete = T,
+                             family = "nb")
+        }})
+        if (all(class(test) != "try-error")) {
+          if (FALSE) {
+            tab <- FALSE
+            beta <- mvtnorm::rmvnorm(1000, mean = model$coefficients,
+                                     sigma = model$Vp)
+            Z <- predict(model, newdata = model$model, off.set = model$offset,
+                         type = "lpmatrix")
+            mu <- exp(as.matrix(beta %*% t(Z)))
+            y <- model$model[[1]]
+            lppd = switch(likelihood, negbin = {
+              apply(mu, 1, function(iter) {
+                w[, x] * dnbinom(y, size = model$family$getTheta(trans = TRUE),
+                                 mu = exp(model$offset) * iter, log = TRUE)
               })
-              out <- loo::loo.matrix(t(lppd), save_psis = TRUE)
-            }
-            else {
-              out <- model
-            }
-
-            if (T) {
-              return(data.frame(model = all_mods[x], index = x,
-                                Convergence = ifelse(model$converged, 1, 0),
-                                AIC = model$aic, ResDev = model$deviance, NulDev = model$null.deviance,
-                                ExpDev = 100 * round(1 - model$deviance/model$null.deviance,
-                                                     3), RMSE = qpcR::RMSE(model)))
-            }
-            else {
-              return(out)
-            }
-          } else {
-            return(data.frame(model = all_mods[x], index = x,
-                              Convergence = NA,
-                              AIC = NA, ResDev = NA, NulDev = NA,
-                              ExpDev = NA, RMSE = NA))
+            }, poisson = {
+              apply(mu, 1, function(iter) {
+                w[, x] * dpois(y, lambda = exp(model$offset) *
+                                 iter, log = TRUE)
+              })
+            }, tweedie = {
+              apply(mu, 1, function(iter) {
+                w[, x] * log(tweedie::dtweedie(y, xi = model$family$getTheta(trans = TRUE),
+                                               mu = exp(model$offset) * iter, phi = model$sig2))
+              })
+            })
+            out <- loo::loo.matrix(t(lppd), save_psis = TRUE)
           }
-        } %>%
-          arrange(AIC)
+          else {
+            out <- model
+          }
 
-        if (!is.na(first_try) & !is.null(first_try) & first_try != F) {
-          BAM_try <- BAM_try[1:min(first_try, nrow(BAM_try)), ] %>%
-            dplyr::group_by(index) %>%
-            dplyr::mutate(new_variable = map_chr(model, function(m) {
-              model <- str_split_1(m, fixed("+"))
-              model <- model[length(model) - 1]
-              model <- str_split_1(str_split_1(model, fixed("("))[2], fixed(","))
-              model <- model[!str_detect(model, "k = ") & !str_detect(model, "bs = ") &
-                               !str_detect(model, "xt = ")]
-              # model <- paste(model, collapse = ", ")
-              model <- str_remove_all(model, " ")
-              model <- paste(model[model %in% predictors], collapse = ", ")
-              return(model)
-            })) %>%
-            ungroup()
+          if (T) {
+            return(data.frame(model = all_mods[x], index = x,
+                              Convergence = ifelse(model$converged, 1, 0),
+                              AIC = model$aic, ResDev = model$deviance, NulDev = model$null.deviance,
+                              ExpDev = 100 * round(1 - model$deviance/model$null.deviance,
+                                                   3), RMSE = qpcR::RMSE(model)))
+          }
+          else {
+            return(out)
+          }
+        } else {
+          return(data.frame(model = all_mods[x], index = x,
+                            Convergence = NA,
+                            AIC = NA, ResDev = NA, NulDev = NA,
+                            ExpDev = NA, RMSE = NA))
         }
+      } %>%
+        arrange(AIC)
 
-        if (!is.na(first_try_AIC) & !is.null(first_try_AIC) & first_try_AIC != F) {
-          BAM_try <- BAM_try %>%
-            dplyr::filter(AIC <= (min(AIC, na.rm = T) + first_try_AIC)) %>%
-            dplyr::group_by(index) %>%
-            dplyr::mutate(new_variable = map_chr(model, function(m) {
-              model <- str_split_1(m, fixed("+"))
-              model <- model[length(model) - 1]
-              model <- str_split_1(str_split_1(model, fixed("("))[2], fixed(","))
-              model <- model[!str_detect(model, "k = ") & !str_detect(model, "bs = ") &
-                               !str_detect(model, "xt = ")]
-              # model <- paste(model, collapse = ", ")
-              model <- str_remove_all(model, " ")
-              model <- paste(model[model %in% predictors], collapse = ", ")
-              return(model)
-            })) %>%
-            ungroup()
-        }
-
-        cat("Selected:\n")
-
-        print(paste0(nrow(BAM_try), ": ",
-                     BAM_try %>%
-                       as.data.frame() %>%
-                       dplyr::select(-c(model, Convergence, ResDev, NulDev, RMSE)) %>%
-                       dplyr::mutate(dAIC = round(AIC - min(AIC, na.rm = T), 1),
-                                     toprint = paste0(new_variable, " (", dAIC, ")")) %>%
-                       pull(toprint) %>%
-                       paste(., collapse = ",   ")))
-      } else {
-        BAM_try <- data.frame(model = all_mods)
+      if (!is.na(first_try) & !is.null(first_try) & first_try != F) {
+        BAM_try <- BAM_try[1:min(first_try, nrow(BAM_try)), ] %>%
+          dplyr::group_by(index) %>%
+          dplyr::mutate(new_variable = map_chr(model, function(m) {
+            model <- str_split_1(m, fixed("+"))
+            model <- model[length(model) - 1]
+            model <- str_split_1(str_split_1(model, fixed("("))[2], fixed(","))
+            model <- model[!str_detect(model, "k = ") & !str_detect(model, "bs = ") &
+                             !str_detect(model, "xt = ")]
+            # model <- paste(model, collapse = ", ")
+            model <- str_remove_all(model, " ")
+            model <- paste(model[model %in% predictors], collapse = ", ")
+            return(model)
+          })) %>%
+          ungroup()
       }
 
-      stopCluster(clust)
-      gc()
-
-      clust <- makeCluster(min(n_cores, nrow(BAM_try)), outfile = outfile)
-      doParallel::registerDoParallel(clust)
-
-      # all_fits <- parLapply(clust, 1:length(all_mods), my_dsm_fct,
-      #                       segdata_obs = segdata_obs, valist = all_mods)
-      # all_fits <- parLapply(clust, 1:10, my_dsm_fct,
-      #                       segdata_obs = segdata_obs, valist = "all_mods")
-      # n_cores <- ifelse(parallel, detectCores() - 1, 1)
-      # clust <- makeCluster(n_cores, outfile = "log.txt")
-
-      if (fit_all_once) {
-        all_models_fitted <- foreach(x = 1:length(all_mods),
-                                     .noexport = ls()[!(ls() %in% c("segdata_obs", "all_mods", "knots", "bnd", "method", "BAM_try",
-                                                                    "use_select"))], # my_dsm_fct
-                                     .packages = c("qpcR", "mgcv", "dplyr")
-        ) %dopar% {
-          # out <- my_dsm_fct(x, segdata_obs = segdata_obs, all_mods = all_mods)
-          if (all_mods[x] %in% BAM_try$model) {
-            cat(x, "FROM ALL MODELS IN PARALLEL /", length(all_mods), ":", all_mods[x], "\n")
-
-            test <- try({if (!is.null(knots)) {
-              bnd <- bnd
-              model <- mgcv::gam(as.formula(all_mods[x]),
-                                 data = segdata_obs,
-                                 method = method,
-                                 select = use_select,
-                                 # drop.unused.levels = F,
-                                 knots = knots,
-                                 family = "nb")
-            } else {
-              model <- mgcv::gam(as.formula(all_mods[x]),
-                                 data = segdata_obs,
-                                 method = method,
-                                 select = use_select,
-                                 # drop.unused.levels = F,
-                                 family = "nb")
-            }})
-            if (all(class(test) != "try-error")) {
-              return(model)
-            } else {
-              return(NULL)
-            }
-          } else {
-            return(NULL)
-          }
-        }
-        # stopCluster(clust)
-        # gc()
-
-        all_fits <- foreach(x = 1:length(all_mods),
-                            .noexport = ls()[!(ls() %in% c("all_models_fitted", "all_mods"))], # my_dsm_fct
-                            .packages = c("qpcR", "mgcv")
-        ) %dopar% {
-          # out <- my_dsm_fct(x, segdata_obs = segdata_obs, all_mods = all_mods)
-          cat(x, "MODELS IN PARALLEL /", length(all_mods), "\n")
-          model <- all_models_fitted[[x]]
-
-          if (all(!is.null(model))) {
-            if (T) {
-              return(data.frame(model = all_mods[x], index = x,
-                                Convergence = ifelse(model$converged, 1, 0),
-                                AIC = model$aic, ResDev = model$deviance, NulDev = model$null.deviance,
-                                ExpDev = 100 * round(1 - model$deviance/model$null.deviance,
-                                                     3), RMSE = qpcR::RMSE(model)))
-            }
-            else {
-              return(out)
-            }
-          } else {
-            return(data.frame(model = all_mods[x], index = x,
-                              Convergence = NA,
-                              AIC = NA, ResDev = NA, NulDev = NA,
-                              ExpDev = NA, RMSE = NA))
-          }
-        }
-        stopCluster(clust)
-        gc()
-      } else {
-        all_fits <- foreach(x = 1:length(all_mods),
-                            .noexport = ls()[!(ls() %in% c("segdata_obs", "all_mods", "knots", "bnd", "method", "BAM_try",
-                                                           "use_select"))], # my_dsm_fct
-                            .packages = c("qpcR", "mgcv", "dplyr")
-        ) %dopar% {
-          # out <- my_dsm_fct(x, segdata_obs = segdata_obs, all_mods = all_mods)
-          if (all_mods[x] %in% BAM_try$model) {
-            cat(x, "MODELS IN PARALLEL /", length(all_mods), ":", all_mods[x], "\n")
-
-            test <- try({if (!is.null(knots)) {
-              bnd <- bnd
-              model <- mgcv::gam(as.formula(all_mods[x]),
-                                 data = segdata_obs,
-                                 method = method,
-                                 select = use_select,
-                                 # drop.unused.levels = F,
-                                 knots = knots,
-                                 family = "nb")
-            } else {
-              model <- mgcv::gam(as.formula(all_mods[x]),
-                                 data = segdata_obs,
-                                 method = method,
-                                 select = use_select,
-                                 # drop.unused.levels = F,
-                                 family = "nb")
-            }})
-            if (all(class(test) != "try-error")) {
-              if (FALSE) {
-                tab <- FALSE
-                beta <- mvtnorm::rmvnorm(1000, mean = model$coefficients,
-                                         sigma = model$Vp)
-                Z <- predict(model, newdata = model$model, off.set = model$offset,
-                             type = "lpmatrix")
-                mu <- exp(as.matrix(beta %*% t(Z)))
-                y <- model$model[[1]]
-                lppd = switch(likelihood, negbin = {
-                  apply(mu, 1, function(iter) {
-                    w[, x] * dnbinom(y, size = model$family$getTheta(trans = TRUE),
-                                     mu = exp(model$offset) * iter, log = TRUE)
-                  })
-                }, poisson = {
-                  apply(mu, 1, function(iter) {
-                    w[, x] * dpois(y, lambda = exp(model$offset) *
-                                     iter, log = TRUE)
-                  })
-                }, tweedie = {
-                  apply(mu, 1, function(iter) {
-                    w[, x] * log(tweedie::dtweedie(y, xi = model$family$getTheta(trans = TRUE),
-                                                   mu = exp(model$offset) * iter, phi = model$sig2))
-                  })
-                })
-                out <- loo::loo.matrix(t(lppd), save_psis = TRUE)
-              }
-              else {
-                out <- model
-              }
-
-              if (T) {
-                return(data.frame(model = all_mods[x], index = x,
-                                  Convergence = ifelse(model$converged, 1, 0),
-                                  AIC = model$aic, ResDev = model$deviance, NulDev = model$null.deviance,
-                                  ExpDev = 100 * round(1 - model$deviance/model$null.deviance,
-                                                       3), RMSE = qpcR::RMSE(model)))
-              }
-              else {
-                return(out)
-              }
-            } else {
-              return(data.frame(model = all_mods[x], index = x,
-                                Convergence = NA,
-                                AIC = NA, ResDev = NA, NulDev = NA,
-                                ExpDev = NA, RMSE = NA))
-            }
-          } else {
-            return(data.frame(model = all_mods[x], index = x,
-                              Convergence = NA,
-                              AIC = NA, ResDev = NA, NulDev = NA,
-                              ExpDev = NA, RMSE = NA))
-          }
-        }
-        stopCluster(clust)
-        gc()
+      if (!is.na(first_try_AIC) & !is.null(first_try_AIC) & first_try_AIC != F) {
+        BAM_try <- BAM_try %>%
+          dplyr::filter(AIC <= (min(AIC, na.rm = T) + first_try_AIC)) %>%
+          dplyr::group_by(index) %>%
+          dplyr::mutate(new_variable = map_chr(model, function(m) {
+            model <- str_split_1(m, fixed("+"))
+            model <- model[length(model) - 1]
+            model <- str_split_1(str_split_1(model, fixed("("))[2], fixed(","))
+            model <- model[!str_detect(model, "k = ") & !str_detect(model, "bs = ") &
+                             !str_detect(model, "xt = ")]
+            # model <- paste(model, collapse = ", ")
+            model <- str_remove_all(model, " ")
+            model <- paste(model[model %in% predictors], collapse = ", ")
+            return(model)
+          })) %>%
+          ungroup()
       }
+
+      cat("Selected:\n")
+
+      print(paste0(nrow(BAM_try), ": ",
+                   BAM_try %>%
+                     as.data.frame() %>%
+                     dplyr::select(-c(model, Convergence, ResDev, NulDev, RMSE)) %>%
+                     dplyr::mutate(dAIC = round(AIC - min(AIC, na.rm = T), 1),
+                                   toprint = paste0(new_variable, " (", dAIC, ")")) %>%
+                     pull(toprint) %>%
+                     paste(., collapse = ",   ")))
     } else {
+      BAM_try <- data.frame(model = all_mods)
+    }
 
-      if (fit_all_once) {
-        all_models_fitted <- map(1:length(all_mods), function(x) {
-          # out <- my_dsm_fct(x, segdata_obs = segdata_obs, all_mods = all_mods)
-          cat(x, "FROM ALL MODELS IN PARALLEL /", length(all_mods), "\n")
+    stopCluster(clust)
+    gc()
+
+    clust <- makeCluster(min(n_cores, nrow(BAM_try)), outfile = outfile)
+    doParallel::registerDoParallel(clust)
+
+    if (fit_all_once) {
+      all_models_fitted <- foreach(x = 1:length(all_mods),
+                                   .noexport = ls()[!(ls() %in% c("segdata_obs", "all_mods", "knots", "bnd", "method", "BAM_try",
+                                                                  "use_select"))], # my_dsm_fct
+                                   .packages = c("qpcR", "mgcv", "dplyr")
+      ) %dopar% {
+        if (all_mods[x] %in% BAM_try$model) {
+          cat(x, "FROM ALL MODELS IN PARALLEL /", length(all_mods), ":", all_mods[x], "\n")
 
           test <- try({if (!is.null(knots)) {
             bnd <- bnd
@@ -1708,37 +1039,46 @@ run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind",
           } else {
             return(NULL)
           }
-        })
-        gc()
+        } else {
+          return(NULL)
+        }
+      }
 
-        all_fits <- map(1:length(all_mods), function(x) {
-          # out <- my_dsm_fct(x, segdata_obs = segdata_obs, all_mods = all_mods)
-          cat(x, "MODELS IN PARALLEL /", length(all_mods), "\n")
-          model <- all_models_fitted[[x]]
+      all_fits <- foreach(x = 1:length(all_mods),
+                          .noexport = ls()[!(ls() %in% c("all_models_fitted", "all_mods"))], # my_dsm_fct
+                          .packages = c("qpcR", "mgcv")
+      ) %dopar% {
+        cat(x, "MODELS IN PARALLEL /", length(all_mods), "\n")
+        model <- all_models_fitted[[x]]
 
-          if (all(!is.null(model))) {
-            if (T) {
-              return(data.frame(model = all_mods[x], index = x,
-                                Convergence = ifelse(model$converged, 1, 0),
-                                AIC = model$aic, ResDev = model$deviance, NulDev = model$null.deviance,
-                                ExpDev = 100 * round(1 - model$deviance/model$null.deviance,
-                                                     3), RMSE = qpcR::RMSE(model)))
-            }
-            else {
-              return(out)
-            }
-          } else {
+        if (all(!is.null(model))) {
+          if (T) {
             return(data.frame(model = all_mods[x], index = x,
-                              Convergence = NA,
-                              AIC = NA, ResDev = NA, NulDev = NA,
-                              ExpDev = NA, RMSE = NA))
+                              Convergence = ifelse(model$converged, 1, 0),
+                              AIC = model$aic, ResDev = model$deviance, NulDev = model$null.deviance,
+                              ExpDev = 100 * round(1 - model$deviance/model$null.deviance,
+                                                   3), RMSE = qpcR::RMSE(model)))
           }
-        })
-        gc()
-      } else {
-        all_fits <- map(1:length(all_mods), function(x) {
-          # out <- my_dsm_fct(x, segdata_obs = segdata_obs, all_mods = all_mods)
-          cat(x, "MODELS IN PARALLEL /", length(all_mods), "\n")
+          else {
+            return(out)
+          }
+        } else {
+          return(data.frame(model = all_mods[x], index = x,
+                            Convergence = NA,
+                            AIC = NA, ResDev = NA, NulDev = NA,
+                            ExpDev = NA, RMSE = NA))
+        }
+      }
+      stopCluster(clust)
+      gc()
+    } else {
+      all_fits <- foreach(x = 1:length(all_mods),
+                          .noexport = ls()[!(ls() %in% c("segdata_obs", "all_mods", "knots", "bnd", "method", "BAM_try",
+                                                         "use_select"))], # my_dsm_fct
+                          .packages = c("qpcR", "mgcv", "dplyr")
+      ) %dopar% {
+        if (all_mods[x] %in% BAM_try$model) {
+          cat(x, "MODELS IN PARALLEL /", length(all_mods), ":", all_mods[x], "\n")
 
           test <- try({if (!is.null(knots)) {
             bnd <- bnd
@@ -1804,9 +1144,15 @@ run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind",
                               AIC = NA, ResDev = NA, NulDev = NA,
                               ExpDev = NA, RMSE = NA))
           }
-        })
-        gc()
+        } else {
+          return(data.frame(model = all_mods[x], index = x,
+                            Convergence = NA,
+                            AIC = NA, ResDev = NA, NulDev = NA,
+                            ExpDev = NA, RMSE = NA))
+        }
       }
+      stopCluster(clust)
+      gc()
     }
 
     all_fits <- do.call("rbind", all_fits)
@@ -1830,165 +1176,29 @@ run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind",
 
   if (use_loo) {
     writeLines("\t* Estimating loocv on all models: please wait")
-    if (parallel) {
-      # all_psis <- parLapply(clust, 1:length(all_mods),
-      #                       my_dsm_fct, segdata_obs = segdata_obs, loo = TRUE)
-      gc()
+    gc()
 
-      n_cores <- ifelse(parallel, ifelse(is.null(ncores),
-                                         detectCores() - 1,
-                                         ncores), 1)
-      clust <- makeCluster(n_cores, outfile = outfile)
-      doParallel::registerDoParallel(clust)
+    n_cores <- ifelse(parallel, ifelse(is.null(ncores),
+                                       detectCores() - 1,
+                                       ncores), 1)
+    clust <- makeCluster(n_cores, outfile = outfile)
+    doParallel::registerDoParallel(clust)
 
-      if (fit_all_once) {
-        all_psis <- foreach(x = 1:length(all_mods),
-                            .noexport = ls()[!(ls() %in% c("all_models_fitted", "all_mods", "response", "esw", "data_valid_loo",
-                                                           # "tab",
-                                                           # "knots", "bnd",
-                                                           "w", "likelihood"))], # my_dsm_fct
-                            .packages = c("qpcR", "mgcv", "mvtnorm", "loo", "dplyr")
-        ) %dopar% {
-          test <- try({{
-            cat(x, "LOO IN PARALLEL /", length(all_mods), "\n")
-
-            model <- all_models_fitted[[x]]
-
-            # rm(all_models_fitted)
-            # gc()
-
-            beta <- mvtnorm::rmvnorm(1000, mean = model$coefficients,
-                                     sigma = model$Vp)
-            if (all(is.null(data_valid_loo))) {
-              offset <- model$offset
-              Z <- predict(model, newdata = model$model, off.set = offset,
-                           type = "lpmatrix")
-              mu <- exp(as.matrix(beta %*% t(Z)))
-              y <- model$model[[1]]
-            } else {
-              offset <- data_valid_loo %>% pull(get(esw))
-              Z <- predict(model, newdata = data_valid_loo,
-                           type = "lpmatrix")
-              mu <- exp(as.matrix(beta %*% t(Z)))
-              y <- data_valid_loo %>% pull(get(response))
-            }
-            lppd = switch(likelihood, negbin = {
-              apply(mu, 1, function(iter) {
-                w[, x] * dnbinom(y, size = model$family$getTheta(trans = TRUE),
-                                 mu = exp(offset) * iter, log = TRUE)
-              })
-            }, poisson = {
-              apply(mu, 1, function(iter) {
-                w[, x] * dpois(y, lambda = exp(offset) *
-                                 iter, log = TRUE)
-              })
-            }, tweedie = {
-              apply(mu, 1, function(iter) {
-                # w[, x] * log(tweedie::dtweedie(y, xi = model$family$getTheta(trans = TRUE),
-                #                                mu = exp(offset) * iter, phi = model$sig2))
-                stop("HERE")
-              })
-            })
-            out <- loo::loo.matrix(t(lppd), save_psis = TRUE)
-
-          } })
-
-          if (all(class(test) == "try-error")) {
-            return(NULL)
-          } else {
-            return(out)
-          }
-        }
-        stopCluster(clust)
-        gc()
-      } else {
-        all_psis <- foreach(x = 1:length(all_mods),
-                            .noexport = ls()[!(ls() %in% c("segdata_obs", "all_mods", "tab", "knots", "bnd", "w", "method", "response", "esw",
-                                                           "data_valid_loo",
-                                                           "likelihood", "use_select"))], # my_dsm_fct
-                            .packages = c("qpcR", "mgcv", "mvtnorm", "loo", "dplyr")
-        ) %dopar% {
+    if (fit_all_once) {
+      all_psis <- foreach(x = 1:length(all_mods),
+                          .noexport = ls()[!(ls() %in% c("all_models_fitted", "all_mods", "response", "offset_effort", "data_valid_loo",
+                                                         # "tab",
+                                                         # "knots", "bnd",
+                                                         "w", "likelihood"))], # my_dsm_fct
+                          .packages = c("qpcR", "mgcv", "mvtnorm", "loo", "dplyr")
+      ) %dopar% {
+        test <- try({{
           cat(x, "LOO IN PARALLEL /", length(all_mods), "\n")
 
-          test <- try({if (!is.null(knots)) {
-            bnd <- bnd
-            model <- mgcv::gam(as.formula(all_mods[x]),
-                               data = segdata_obs,
-                               method = method,
-                               select = use_select,
-                               # drop.unused.levels = F,
-                               knots = knots,
-                               family = "nb")
-          } else {
-            model <- mgcv::gam(as.formula(all_mods[x]),
-                               data = segdata_obs,
-                               method = method,
-                               select = use_select,
-                               # drop.unused.levels = F,
-                               family = "nb")
-          }})
-
-          if (all(class(test) != "try-error")) {
-            if (TRUE) {
-              tab <- FALSE
-              beta <- mvtnorm::rmvnorm(1000, mean = model$coefficients,
-                                       sigma = model$Vp)
-              if (all(is.null(data_valid_loo))) {
-                offset <- model$offset
-                Z <- predict(model, newdata = model$model, off.set = offset,
-                             type = "lpmatrix")
-                mu <- exp(as.matrix(beta %*% t(Z)))
-                y <- model$model[[1]]
-              } else {
-                offset <- data_valid_loo %>% pull(get(esw))
-                Z <- predict(model, newdata = data_valid_loo,
-                             type = "lpmatrix")
-                mu <- exp(as.matrix(beta %*% t(Z)))
-                y <- data_valid_loo %>% pull(get(response))
-              }
-              lppd = switch(likelihood, negbin = {
-                apply(mu, 1, function(iter) {
-                  w[, x] * dnbinom(y, size = model$family$getTheta(trans = TRUE),
-                                   mu = exp(offset) * iter, log = TRUE)
-                })
-              }, poisson = {
-                apply(mu, 1, function(iter) {
-                  w[, x] * dpois(y, lambda = exp(offset) *
-                                   iter, log = TRUE)
-                })
-              }, tweedie = {
-                apply(mu, 1, function(iter) {
-                  # w[, x] * log(tweedie::dtweedie(y, xi = model$family$getTheta(trans = TRUE),
-                  #                                mu = exp(offset) * iter, phi = model$sig2))
-                  stop("HERE")
-                })
-              })
-              out <- loo::loo.matrix(t(lppd), save_psis = TRUE)
-            }
-            else {
-              out <- model
-            }
-            if (tab) {
-              return(data.frame(model = all_mods[x], index = x,
-                                Convergence = ifelse(model$converged, 1, 0),
-                                AIC = model$aic, ResDev = model$deviance, NulDev = model$null.deviance,
-                                ExpDev = 100 * round(1 - model$deviance/model$null.deviance,
-                                                     3), RMSE = qpcR::RMSE(model)))
-            }
-            else {
-              return(out)
-            }
-          } else {
-            return(NULL)
-          }
-        }
-        stopCluster(clust)
-        gc()
-      }
-    } else {
-      if (fit_all_once) {
-        all_psis <- pblapply(1:length(all_mods), function(x) {
           model <- all_models_fitted[[x]]
+
+          # rm(all_models_fitted)
+          # gc()
 
           beta <- mvtnorm::rmvnorm(1000, mean = model$coefficients,
                                    sigma = model$Vp)
@@ -1999,7 +1209,7 @@ run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind",
             mu <- exp(as.matrix(beta %*% t(Z)))
             y <- model$model[[1]]
           } else {
-            offset <- data_valid_loo %>% pull(get(esw))
+            offset <- data_valid_loo %>% pull(get(offset_effort))
             Z <- predict(model, newdata = data_valid_loo,
                          type = "lpmatrix")
             mu <- exp(as.matrix(beta %*% t(Z)))
@@ -2024,13 +1234,101 @@ run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind",
           })
           out <- loo::loo.matrix(t(lppd), save_psis = TRUE)
 
+        } })
+
+        if (all(class(test) == "try-error")) {
+          return(NULL)
+        } else {
           return(out)
-        })
-      } else {
-        all_psis <- pblapply(1:length(all_mods), my_dsm_fct,
-                             segdata_obs = segdata_obs, loo = TRUE)
+        }
       }
+      stopCluster(clust)
+      gc()
+    } else {
+      all_psis <- foreach(x = 1:length(all_mods),
+                          .noexport = ls()[!(ls() %in% c("segdata_obs", "all_mods", "tab", "knots", "bnd", "w", "method", "response", "offset_effort",
+                                                         "data_valid_loo",
+                                                         "likelihood", "use_select"))], # my_dsm_fct
+                          .packages = c("qpcR", "mgcv", "mvtnorm", "loo", "dplyr")
+      ) %dopar% {
+        cat(x, "LOO IN PARALLEL /", length(all_mods), "\n")
+
+        test <- try({if (!is.null(knots)) {
+          bnd <- bnd
+          model <- mgcv::gam(as.formula(all_mods[x]),
+                             data = segdata_obs,
+                             method = method,
+                             select = use_select,
+                             # drop.unused.levels = F,
+                             knots = knots,
+                             family = "nb")
+        } else {
+          model <- mgcv::gam(as.formula(all_mods[x]),
+                             data = segdata_obs,
+                             method = method,
+                             select = use_select,
+                             # drop.unused.levels = F,
+                             family = "nb")
+        }})
+
+        if (all(class(test) != "try-error")) {
+          if (TRUE) {
+            tab <- FALSE
+            beta <- mvtnorm::rmvnorm(1000, mean = model$coefficients,
+                                     sigma = model$Vp)
+            if (all(is.null(data_valid_loo))) {
+              offset <- model$offset
+              Z <- predict(model, newdata = model$model, off.set = offset,
+                           type = "lpmatrix")
+              mu <- exp(as.matrix(beta %*% t(Z)))
+              y <- model$model[[1]]
+            } else {
+              offset <- data_valid_loo %>% pull(get(offset_effort))
+              Z <- predict(model, newdata = data_valid_loo,
+                           type = "lpmatrix")
+              mu <- exp(as.matrix(beta %*% t(Z)))
+              y <- data_valid_loo %>% pull(get(response))
+            }
+            lppd = switch(likelihood, negbin = {
+              apply(mu, 1, function(iter) {
+                w[, x] * dnbinom(y, size = model$family$getTheta(trans = TRUE),
+                                 mu = exp(offset) * iter, log = TRUE)
+              })
+            }, poisson = {
+              apply(mu, 1, function(iter) {
+                w[, x] * dpois(y, lambda = exp(offset) *
+                                 iter, log = TRUE)
+              })
+            }, tweedie = {
+              apply(mu, 1, function(iter) {
+                # w[, x] * log(tweedie::dtweedie(y, xi = model$family$getTheta(trans = TRUE),
+                #                                mu = exp(offset) * iter, phi = model$sig2))
+                stop("HERE")
+              })
+            })
+            out <- loo::loo.matrix(t(lppd), save_psis = TRUE)
+          }
+          else {
+            out <- model
+          }
+          if (tab) {
+            return(data.frame(model = all_mods[x], index = x,
+                              Convergence = ifelse(model$converged, 1, 0),
+                              AIC = model$aic, ResDev = model$deviance, NulDev = model$null.deviance,
+                              ExpDev = 100 * round(1 - model$deviance/model$null.deviance,
+                                                   3), RMSE = qpcR::RMSE(model)))
+          }
+          else {
+            return(out)
+          }
+        } else {
+          return(NULL)
+        }
+      }
+      stopCluster(clust)
+      gc()
     }
+    # }
     loo_ic_coefs <- do.call(rbind, lapply(all_psis, function(x) {
       if (is.null(x)) {
         return(NA)
@@ -2052,103 +1350,88 @@ run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind",
     all_fits$stacking_weights[index_order_best] <- loow
     all_fits_best_sw <- all_fits %>% slice_min(looic, n = k) %>% arrange(looic)
     index_order_sw <- all_fits_best_sw$index
-    if (!parallel) {
-      if (fit_all_once) {
-        best <- lapply(index_order_sw, my_dsm_fct, tab = FALSE,
-                       segdata_obs = X)
-        best_std <- lapply(index_order_sw, function(x) {
-          return(all_models_fitted[[x]])
-        })
-      } else {
-        best <- lapply(index_order_sw, my_dsm_fct, tab = FALSE,
-                       segdata_obs = X)
-        best_std <- lapply(index_order_sw, my_dsm_fct, tab = FALSE,
-                           segdata_obs = segdata_obs)
-      }
-    } else {
-      if (fit_all_once) {
-        n_cores <- ifelse(parallel, ifelse(is.null(ncores),
-                                           detectCores() - 1,
-                                           ncores), 1)
-        clust <- makeCluster(n_cores, outfile = outfile)
-        doParallel::registerDoParallel(clust)
+    if (fit_all_once) {
+      n_cores <- ifelse(parallel, ifelse(is.null(ncores),
+                                         detectCores() - 1,
+                                         ncores), 1)
+      clust <- makeCluster(n_cores, outfile = outfile)
+      doParallel::registerDoParallel(clust)
 
-        best <- foreach(x = index_order_sw,
-                        .noexport = ls()[!(ls() %in% c("X", "all_mods", "knots", "bnd", "index_order_sw", "method",
-                                                       "use_select"))], # my_dsm_fct
-                        .packages = c("qpcR", "mgcv", "dplyr")
-        ) %dopar% {
-          # out <- my_dsm_fct(x, segdata_obs = segdata_obs, all_mods = all_mods)
-          cat(match(x, index_order_sw), "BEST MODELS IN PARALLEL /", length(index_order_sw), "\n")
+      best <- foreach(x = index_order_sw,
+                      .noexport = ls()[!(ls() %in% c("X", "all_mods", "knots", "bnd", "index_order_sw", "method",
+                                                     "use_select"))], # my_dsm_fct
+                      .packages = c("qpcR", "mgcv", "dplyr")
+      ) %dopar% {
+        # out <- my_dsm_fct(x, segdata_obs = segdata_obs, all_mods = all_mods)
+        cat(match(x, index_order_sw), "BEST MODELS IN PARALLEL /", length(index_order_sw), "\n")
 
-          if (!is.null(knots)) {
-            bnd <- bnd
-            model <- mgcv::gam(as.formula(all_mods[x]),
-                               data = X,
-                               method = method,
-                               select = use_select,
-                               # drop.unused.levels = F,
-                               knots = knots,
-                               family = "nb")
-          } else {
-            model <- mgcv::gam(as.formula(all_mods[x]),
-                               data = X,
-                               method = method,
-                               select = use_select,
-                               # drop.unused.levels = F,
-                               family = "nb")
-          }
-
-          # summary(model)
-          # gratia::draw(model)
-
-          if (F) {
-            tab <- FALSE
-            beta <- mvtnorm::rmvnorm(1000, mean = model$coefficients,
-                                     sigma = model$Vp)
-            Z <- predict(model, newdata = model$model, off.set = model$offset,
-                         type = "lpmatrix")
-            mu <- exp(as.matrix(beta %*% t(Z)))
-            y <- model$model[[1]]
-            lppd = switch(likelihood, negbin = {
-              apply(mu, 1, function(iter) {
-                w[, x] * dnbinom(y, size = model$family$getTheta(trans = TRUE),
-                                 mu = exp(model$offset) * iter, log = TRUE)
-              })
-            }, poisson = {
-              apply(mu, 1, function(iter) {
-                w[, x] * dpois(y, lambda = exp(model$offset) *
-                                 iter, log = TRUE)
-              })
-            }, tweedie = {
-              apply(mu, 1, function(iter) {
-                w[, x] * log(tweedie::dtweedie(y, xi = model$family$getTheta(trans = TRUE),
-                                               mu = exp(model$offset) * iter, phi = model$sig2))
-              })
-            })
-            out <- loo::loo.matrix(t(lppd), save_psis = TRUE)
-          }
-          else {
-            out <- model
-          }
-          if (F) {
-            return(data.frame(model = all_mods[x], index = x,
-                              Convergence = ifelse(model$converged, 1, 0),
-                              AIC = model$aic, ResDev = model$deviance, NulDev = model$null.deviance,
-                              ExpDev = 100 * round(1 - model$deviance/model$null.deviance,
-                                                   3), RMSE = qpcR::RMSE(model)))
-          }
-          else {
-            return(out)
-          }
+        if (!is.null(knots)) {
+          bnd <- bnd
+          model <- mgcv::gam(as.formula(all_mods[x]),
+                             data = X,
+                             method = method,
+                             select = use_select,
+                             # drop.unused.levels = F,
+                             knots = knots,
+                             family = "nb")
+        } else {
+          model <- mgcv::gam(as.formula(all_mods[x]),
+                             data = X,
+                             method = method,
+                             select = use_select,
+                             # drop.unused.levels = F,
+                             family = "nb")
         }
-        best_std <- lapply(index_order_sw, function(x) {
-          return(all_models_fitted[[x]])
-        })
 
-        stopCluster(clust)
-        gc()
+        # summary(model)
+        # gratia::draw(model)
+
+        if (F) {
+          tab <- FALSE
+          beta <- mvtnorm::rmvnorm(1000, mean = model$coefficients,
+                                   sigma = model$Vp)
+          Z <- predict(model, newdata = model$model, off.set = model$offset,
+                       type = "lpmatrix")
+          mu <- exp(as.matrix(beta %*% t(Z)))
+          y <- model$model[[1]]
+          lppd = switch(likelihood, negbin = {
+            apply(mu, 1, function(iter) {
+              w[, x] * dnbinom(y, size = model$family$getTheta(trans = TRUE),
+                               mu = exp(model$offset) * iter, log = TRUE)
+            })
+          }, poisson = {
+            apply(mu, 1, function(iter) {
+              w[, x] * dpois(y, lambda = exp(model$offset) *
+                               iter, log = TRUE)
+            })
+          }, tweedie = {
+            apply(mu, 1, function(iter) {
+              w[, x] * log(tweedie::dtweedie(y, xi = model$family$getTheta(trans = TRUE),
+                                             mu = exp(model$offset) * iter, phi = model$sig2))
+            })
+          })
+          out <- loo::loo.matrix(t(lppd), save_psis = TRUE)
+        }
+        else {
+          out <- model
+        }
+        if (F) {
+          return(data.frame(model = all_mods[x], index = x,
+                            Convergence = ifelse(model$converged, 1, 0),
+                            AIC = model$aic, ResDev = model$deviance, NulDev = model$null.deviance,
+                            ExpDev = 100 * round(1 - model$deviance/model$null.deviance,
+                                                 3), RMSE = qpcR::RMSE(model)))
+        }
+        else {
+          return(out)
+        }
       }
+      best_std <- lapply(index_order_sw, function(x) {
+        return(all_models_fitted[[x]])
+      })
+
+      stopCluster(clust)
+      gc()
     }
 
     all_fits <- all_fits %>% arrange(looic)
@@ -2158,275 +1441,19 @@ run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind",
     index_order_best <- as.numeric(get_k_best_models(tab_model = all_fits_best,
                                                      k = k, use_loo = FALSE))
     writeLines("\t* Estimating loocv on k best models: please wait")
-    # if (!parallel) {
-    #   if (fit_all_once) {
-    #     all_psis <- lapply(index_order_best, function(x) {
-    #       model <- all_models_fitted[[x]]
-    #
-    #       beta <- mvtnorm::rmvnorm(1000, mean = model$coefficients,
-    #                                sigma = model$Vp)
-    #       Z <- predict(model, newdata = model$model, off.set = model$offset,
-    #                    type = "lpmatrix")
-    #       mu <- exp(as.matrix(beta %*% t(Z)))
-    #       y <- model$model[[1]]
-    #       lppd = switch(likelihood, negbin = {
-    #         apply(mu, 1, function(iter) {
-    #           w[, x] * dnbinom(y, size = model$family$getTheta(trans = TRUE),
-    #                            mu = exp(model$offset) * iter, log = TRUE)
-    #         })
-    #       }, poisson = {
-    #         apply(mu, 1, function(iter) {
-    #           w[, x] * dpois(y, lambda = exp(model$offset) *
-    #                            iter, log = TRUE)
-    #         })
-    #       }, tweedie = {
-    #         apply(mu, 1, function(iter) {
-    #           w[, x] * log(tweedie::dtweedie(y, xi = model$family$getTheta(trans = TRUE),
-    #                                          mu = exp(model$offset) * iter, phi = model$sig2))
-    #         })
-    #       })
-    #       out <- loo::loo.matrix(t(lppd), save_psis = TRUE)
-    #       return(out)
-    #     })
-    #   } else {
-    #     all_psis <- lapply(index_order_best, my_dsm_fct, segdata_obs = segdata_obs, all_mods = all_mods,
-    #                        loo = TRUE)
-    #   }
-    # }
-    # else {
-    #   if (fit_all_once) {
-    #     n_cores <- ifelse(parallel, ifelse(is.null(ncores),
-    #                                        detectCores() - 1,
-    #                                        ncores), 1)
-    #     clust <- makeCluster(n_cores, outfile = "log.txt")
-    #     doParallel::registerDoParallel(clust)
-    #
-    #     all_psis <- foreach(x = index_order_best,
-    #                         .noexport = ls()[!(ls() %in% c("all_models_fitted", "all_mods",
-    #                                                        # "tab", "knots", "bnd",
-    #                                                        "index_order_best", "w",
-    #                                                        "likelihood"))], # my_dsm_fct
-    #                         .packages = c("qpcR", "mgcv", "mvtnorm", "loo", "dplyr")
-    #     ) %dopar% {
-    #       cat(match(x, index_order_best), "LOO IN PARALLEL /", length(index_order_best), "\n")
-    #
-    #       model <- all_models_fitted[[x]]
-    #
-    #       tab <- FALSE
-    #       beta <- mvtnorm::rmvnorm(1000, mean = model$coefficients,
-    #                                sigma = model$Vp)
-    #       Z <- predict(model, newdata = model$model, off.set = model$offset,
-    #                    type = "lpmatrix")
-    #       mu <- exp(as.matrix(beta %*% t(Z)))
-    #       y <- model$model[[1]]
-    #       lppd = switch(likelihood, negbin = {
-    #         apply(mu, 1, function(iter) {
-    #           w[, x] * dnbinom(y, size = model$family$getTheta(trans = TRUE),
-    #                            mu = exp(model$offset) * iter, log = TRUE)
-    #         })
-    #       }, poisson = {
-    #         apply(mu, 1, function(iter) {
-    #           w[, x] * dpois(y, lambda = exp(model$offset) *
-    #                            iter, log = TRUE)
-    #         })
-    #       }, tweedie = {
-    #         apply(mu, 1, function(iter) {
-    #           w[, x] * log(tweedie::dtweedie(y, xi = model$family$getTheta(trans = TRUE),
-    #                                          mu = exp(model$offset) * iter, phi = model$sig2))
-    #         })
-    #       })
-    #       out <- loo::loo.matrix(t(lppd), save_psis = TRUE)
-    #
-    #       return(out)
-    #     }
-    #     stopCluster(clust)
-    #     gc()
-    #
-    #   } else {
-    #     n_cores <- ifelse(parallel, ifelse(is.null(ncores),
-    #                                        detectCores() - 1,
-    #                                        ncores), 1)
-    #     clust <- makeCluster(n_cores, outfile = "log.txt")
-    #     doParallel::registerDoParallel(clust)
-    #
-    #     all_psis <- foreach(x = index_order_best,
-    #                         .noexport = ls()[!(ls() %in% c("segdata_obs", "all_mods", "tab", "knots", "bnd", "index_order_best", "w",
-    #                                                        "likelihood"))], # my_dsm_fct
-    #                         .packages = c("qpcR", "mgcv", "mvtnorm", "loo", "dplyr")
-    #     ) %dopar% {
-    #       cat(match(x, index_order_best), "LOO IN PARALLEL /", length(index_order_best), "\n")
-    #
-    #       if (!is.null(knots)) {
-    #         bnd <- bnd
-    #         model <- mgcv::gam(as.formula(all_mods[x]),
-    #                            data = segdata_obs,
-    #                            method = ifelse(nrow(segdata_obs) > 20000,
-    #                                            "fREML",
-    #                                            "REML"),
-    #                            drop.unused.levels = F,
-    #                            knots = knots,
-    #                            family = "nb")
-    #       } else {
-    #         model <- mgcv::gam(as.formula(all_mods[x]),
-    #                            data = segdata_obs,
-    #                            method = ifelse(nrow(segdata_obs) > 20000,
-    #                                            "fREML",
-    #                                            "REML"),
-    #                            drop.unused.levels = F,
-    #                            family = "nb")
-    #       }
-    #
-    #       if (TRUE) {
-    #         tab <- FALSE
-    #         beta <- mvtnorm::rmvnorm(1000, mean = model$coefficients,
-    #                                  sigma = model$Vp)
-    #         Z <- predict(model, newdata = model$model, off.set = model$offset,
-    #                      type = "lpmatrix")
-    #         mu <- exp(as.matrix(beta %*% t(Z)))
-    #         y <- model$model[[1]]
-    #         lppd = switch(likelihood, negbin = {
-    #           apply(mu, 1, function(iter) {
-    #             w[, x] * dnbinom(y, size = model$family$getTheta(trans = TRUE),
-    #                              mu = exp(model$offset) * iter, log = TRUE)
-    #           })
-    #         }, poisson = {
-    #           apply(mu, 1, function(iter) {
-    #             w[, x] * dpois(y, lambda = exp(model$offset) *
-    #                              iter, log = TRUE)
-    #           })
-    #         }, tweedie = {
-    #           apply(mu, 1, function(iter) {
-    #             w[, x] * log(tweedie::dtweedie(y, xi = model$family$getTheta(trans = TRUE),
-    #                                            mu = exp(model$offset) * iter, phi = model$sig2))
-    #           })
-    #         })
-    #         out <- loo::loo.matrix(t(lppd), save_psis = TRUE)
-    #       }
-    #       else {
-    #         out <- model
-    #       }
-    #       if (tab) {
-    #         return(data.frame(model = all_mods[x], index = x,
-    #                           Convergence = ifelse(model$converged, 1, 0),
-    #                           AIC = model$aic, ResDev = model$deviance, NulDev = model$null.deviance,
-    #                           ExpDev = 100 * round(1 - model$deviance/model$null.deviance,
-    #                                                3), RMSE = qpcR::RMSE(model)))
-    #       }
-    #       else {
-    #         return(out)
-    #       }
-    #     }
-    #     stopCluster(clust)
-    #     gc()
-    #   }
-    # }
-    #
-    # get_elpd_loo <- do.call("cbind", lapply(1:k, function(l) {
-    #   all_psis[[l]]$pointwise[, "elpd_loo"]
-    # }))
-    # loow <- as.numeric(loo::stacking_weights(get_elpd_loo))
-    # all_fits$stacking_weights[index_order_best] <- loow
+
     all_fits$stacking_weights[index_order_best] <- 1
     all_fits_best_sw <- all_fits %>% slice_min(AIC, n = k) %>% arrange(AIC)
     index_order_sw <- as.numeric(all_fits_best_sw$index)
-    if (!parallel) {
-      if (fit_all_once) {
-        best <- lapply(index_order_sw, my_dsm_fct, tab = FALSE, all_mods = all_mods,
-                       segdata_obs = X)
-        best_std <- lapply(index_order_sw, function(x) {
-          return(all_models_fitted[[x]])
-        })
-      } else {
-        best <- lapply(index_order_sw, my_dsm_fct, tab = FALSE, all_mods = all_mods,
-                       segdata_obs = X)
-        best_std <- lapply(index_order_sw, my_dsm_fct, tab = FALSE, all_mods = all_mods,
-                           segdata_obs = segdata_obs)
-      }
-    } else {
-      n_cores <- ifelse(parallel, ifelse(is.null(ncores),
-                                         detectCores() - 1,
-                                         ncores), 1)
-      clust <- makeCluster(n_cores, outfile = outfile)
-      doParallel::registerDoParallel(clust)
 
-      if (fit_all_once) {
-        if (fit_with_actual_data) {
-          best <- foreach(x = index_order_sw,
-                          .noexport = ls()[!(ls() %in% c("X", "all_mods", "knots", "bnd", "index_order_sw", "method",
-                                                         "use_select"))], # my_dsm_fct
-                          .packages = c("qpcR", "mgcv", "dplyr")
-          ) %dopar% {
-            # out <- my_dsm_fct(x, segdata_obs = segdata_obs, all_mods = all_mods)
-            cat(match(x, index_order_sw), "BEST MODELS IN PARALLEL /", length(index_order_sw), "\n")
+    n_cores <- ifelse(parallel, ifelse(is.null(ncores),
+                                       detectCores() - 1,
+                                       ncores), 1)
+    clust <- makeCluster(n_cores, outfile = outfile)
+    doParallel::registerDoParallel(clust)
 
-            if (!is.null(knots)) {
-              bnd <- bnd
-              model <- mgcv::gam(as.formula(all_mods[x]),
-                                 data = X,
-                                 method = method,
-                                 select = use_select,
-                                 # drop.unused.levels = F,
-                                 knots = knots,
-                                 family = "nb")
-            } else {
-              model <- mgcv::gam(as.formula(all_mods[x]),
-                                 data = X,
-                                 method = method,
-                                 select = use_select,
-                                 # drop.unused.levels = F,
-                                 family = "nb")
-            }
-
-            # summary(model)
-            # gratia::draw(model)
-
-            if (F) {
-              tab <- FALSE
-              beta <- mvtnorm::rmvnorm(1000, mean = model$coefficients,
-                                       sigma = model$Vp)
-              Z <- predict(model, newdata = model$model, off.set = model$offset,
-                           type = "lpmatrix")
-              mu <- exp(as.matrix(beta %*% t(Z)))
-              y <- model$model[[1]]
-              lppd = switch(likelihood, negbin = {
-                apply(mu, 1, function(iter) {
-                  w[, x] * dnbinom(y, size = model$family$getTheta(trans = TRUE),
-                                   mu = exp(model$offset) * iter, log = TRUE)
-                })
-              }, poisson = {
-                apply(mu, 1, function(iter) {
-                  w[, x] * dpois(y, lambda = exp(model$offset) *
-                                   iter, log = TRUE)
-                })
-              }, tweedie = {
-                apply(mu, 1, function(iter) {
-                  w[, x] * log(tweedie::dtweedie(y, xi = model$family$getTheta(trans = TRUE),
-                                                 mu = exp(model$offset) * iter, phi = model$sig2))
-                })
-              })
-              out <- loo::loo.matrix(t(lppd), save_psis = TRUE)
-            }
-            else {
-              out <- model
-            }
-            if (F) {
-              return(data.frame(model = all_mods[x], index = x,
-                                Convergence = ifelse(model$converged, 1, 0),
-                                AIC = model$aic, ResDev = model$deviance, NulDev = model$null.deviance,
-                                ExpDev = 100 * round(1 - model$deviance/model$null.deviance,
-                                                     3), RMSE = qpcR::RMSE(model)))
-            }
-            else {
-              return(out)
-            }
-          }
-        } else {
-          best <- NULL
-        }
-        best_std <- lapply(index_order_sw, function(x) {
-          return(all_models_fitted[[x]])
-        })
-      } else {
+    if (fit_all_once) {
+      if (fit_with_actual_data) {
         best <- foreach(x = index_order_sw,
                         .noexport = ls()[!(ls() %in% c("X", "all_mods", "knots", "bnd", "index_order_sw", "method",
                                                        "use_select"))], # my_dsm_fct
@@ -2496,79 +1523,153 @@ run_all_DSM <- function (distFit = NULL, segdata_obs, obsdata, response = "ind",
             return(out)
           }
         }
-        best_std <- foreach(x = index_order_sw,
-                            .noexport = ls()[!(ls() %in% c("segdata_obs", "all_mods", "knots", "bnd", "index_order_sw", "method",
-                                                           "use_select"))], # my_dsm_fct
-                            .packages = c("qpcR", "mgcv", "dplyr")
-        ) %dopar% {
-          # out <- my_dsm_fct(x, segdata_obs = segdata_obs, all_mods = all_mods)
-          cat(match(x, index_order_sw), "BEST MODELS_STD IN PARALLEL /", length(index_order_sw), "\n")
+      } else {
+        best <- NULL
+      }
+      best_std <- lapply(index_order_sw, function(x) {
+        return(all_models_fitted[[x]])
+      })
+    } else {
+      best <- foreach(x = index_order_sw,
+                      .noexport = ls()[!(ls() %in% c("X", "all_mods", "knots", "bnd", "index_order_sw", "method",
+                                                     "use_select"))], # my_dsm_fct
+                      .packages = c("qpcR", "mgcv", "dplyr")
+      ) %dopar% {
+        # out <- my_dsm_fct(x, segdata_obs = segdata_obs, all_mods = all_mods)
+        cat(match(x, index_order_sw), "BEST MODELS IN PARALLEL /", length(index_order_sw), "\n")
 
-          if (!is.null(knots)) {
-            bnd <- bnd
-            model <- mgcv::gam(as.formula(all_mods[x]),
-                               data = segdata_obs,
-                               method = method,
-                               select = use_select,
-                               # drop.unused.levels = F,
-                               knots = knots,
-                               family = "nb")
-          } else {
-            model <- mgcv::gam(as.formula(all_mods[x]),
-                               data = segdata_obs,
-                               method = method,
-                               select = use_select,
-                               # drop.unused.levels = F,
-                               family = "nb")
-          }
+        if (!is.null(knots)) {
+          bnd <- bnd
+          model <- mgcv::gam(as.formula(all_mods[x]),
+                             data = X,
+                             method = method,
+                             select = use_select,
+                             # drop.unused.levels = F,
+                             knots = knots,
+                             family = "nb")
+        } else {
+          model <- mgcv::gam(as.formula(all_mods[x]),
+                             data = X,
+                             method = method,
+                             select = use_select,
+                             # drop.unused.levels = F,
+                             family = "nb")
+        }
 
-          # summary(model)
-          # gratia::draw(model)
+        # summary(model)
+        # gratia::draw(model)
 
-          if (F) {
-            tab <- FALSE
-            beta <- mvtnorm::rmvnorm(1000, mean = model$coefficients,
-                                     sigma = model$Vp)
-            Z <- predict(model, newdata = model$model, off.set = model$offset,
-                         type = "lpmatrix")
-            mu <- exp(as.matrix(beta %*% t(Z)))
-            y <- model$model[[1]]
-            lppd = switch(likelihood, negbin = {
-              apply(mu, 1, function(iter) {
-                w[, x] * dnbinom(y, size = model$family$getTheta(trans = TRUE),
-                                 mu = exp(model$offset) * iter, log = TRUE)
-              })
-            }, poisson = {
-              apply(mu, 1, function(iter) {
-                w[, x] * dpois(y, lambda = exp(model$offset) *
-                                 iter, log = TRUE)
-              })
-            }, tweedie = {
-              apply(mu, 1, function(iter) {
-                w[, x] * log(tweedie::dtweedie(y, xi = model$family$getTheta(trans = TRUE),
-                                               mu = exp(model$offset) * iter, phi = model$sig2))
-              })
+        if (F) {
+          tab <- FALSE
+          beta <- mvtnorm::rmvnorm(1000, mean = model$coefficients,
+                                   sigma = model$Vp)
+          Z <- predict(model, newdata = model$model, off.set = model$offset,
+                       type = "lpmatrix")
+          mu <- exp(as.matrix(beta %*% t(Z)))
+          y <- model$model[[1]]
+          lppd = switch(likelihood, negbin = {
+            apply(mu, 1, function(iter) {
+              w[, x] * dnbinom(y, size = model$family$getTheta(trans = TRUE),
+                               mu = exp(model$offset) * iter, log = TRUE)
             })
-            out <- loo::loo.matrix(t(lppd), save_psis = TRUE)
-          }
-          else {
-            out <- model
-          }
-          if (FALSE) {
-            return(data.frame(model = all_mods[x], index = x,
-                              Convergence = ifelse(model$converged, 1, 0),
-                              AIC = model$aic, ResDev = model$deviance, NulDev = model$null.deviance,
-                              ExpDev = 100 * round(1 - model$deviance/model$null.deviance,
-                                                   3), RMSE = qpcR::RMSE(model)))
-          }
-          else {
-            return(out)
-          }
+          }, poisson = {
+            apply(mu, 1, function(iter) {
+              w[, x] * dpois(y, lambda = exp(model$offset) *
+                               iter, log = TRUE)
+            })
+          }, tweedie = {
+            apply(mu, 1, function(iter) {
+              w[, x] * log(tweedie::dtweedie(y, xi = model$family$getTheta(trans = TRUE),
+                                             mu = exp(model$offset) * iter, phi = model$sig2))
+            })
+          })
+          out <- loo::loo.matrix(t(lppd), save_psis = TRUE)
+        }
+        else {
+          out <- model
+        }
+        if (F) {
+          return(data.frame(model = all_mods[x], index = x,
+                            Convergence = ifelse(model$converged, 1, 0),
+                            AIC = model$aic, ResDev = model$deviance, NulDev = model$null.deviance,
+                            ExpDev = 100 * round(1 - model$deviance/model$null.deviance,
+                                                 3), RMSE = qpcR::RMSE(model)))
+        }
+        else {
+          return(out)
         }
       }
-      # stopCluster(clust)
-      # gc()
+      best_std <- foreach(x = index_order_sw,
+                          .noexport = ls()[!(ls() %in% c("segdata_obs", "all_mods", "knots", "bnd", "index_order_sw", "method",
+                                                         "use_select"))], # my_dsm_fct
+                          .packages = c("qpcR", "mgcv", "dplyr")
+      ) %dopar% {
+        # out <- my_dsm_fct(x, segdata_obs = segdata_obs, all_mods = all_mods)
+        cat(match(x, index_order_sw), "BEST MODELS_STD IN PARALLEL /", length(index_order_sw), "\n")
+
+        if (!is.null(knots)) {
+          bnd <- bnd
+          model <- mgcv::gam(as.formula(all_mods[x]),
+                             data = segdata_obs,
+                             method = method,
+                             select = use_select,
+                             # drop.unused.levels = F,
+                             knots = knots,
+                             family = "nb")
+        } else {
+          model <- mgcv::gam(as.formula(all_mods[x]),
+                             data = segdata_obs,
+                             method = method,
+                             select = use_select,
+                             # drop.unused.levels = F,
+                             family = "nb")
+        }
+
+        # summary(model)
+        # gratia::draw(model)
+
+        if (F) {
+          tab <- FALSE
+          beta <- mvtnorm::rmvnorm(1000, mean = model$coefficients,
+                                   sigma = model$Vp)
+          Z <- predict(model, newdata = model$model, off.set = model$offset,
+                       type = "lpmatrix")
+          mu <- exp(as.matrix(beta %*% t(Z)))
+          y <- model$model[[1]]
+          lppd = switch(likelihood, negbin = {
+            apply(mu, 1, function(iter) {
+              w[, x] * dnbinom(y, size = model$family$getTheta(trans = TRUE),
+                               mu = exp(model$offset) * iter, log = TRUE)
+            })
+          }, poisson = {
+            apply(mu, 1, function(iter) {
+              w[, x] * dpois(y, lambda = exp(model$offset) *
+                               iter, log = TRUE)
+            })
+          }, tweedie = {
+            apply(mu, 1, function(iter) {
+              w[, x] * log(tweedie::dtweedie(y, xi = model$family$getTheta(trans = TRUE),
+                                             mu = exp(model$offset) * iter, phi = model$sig2))
+            })
+          })
+          out <- loo::loo.matrix(t(lppd), save_psis = TRUE)
+        }
+        else {
+          out <- model
+        }
+        if (FALSE) {
+          return(data.frame(model = all_mods[x], index = x,
+                            Convergence = ifelse(model$converged, 1, 0),
+                            AIC = model$aic, ResDev = model$deviance, NulDev = model$null.deviance,
+                            ExpDev = 100 * round(1 - model$deviance/model$null.deviance,
+                                                 3), RMSE = qpcR::RMSE(model)))
+        }
+        else {
+          return(out)
+        }
+      }
     }
+
     all_fits <- all_fits %>% arrange(AIC)
   }
   if (parallel) {
