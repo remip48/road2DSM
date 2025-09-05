@@ -1,3 +1,13 @@
+#' Title
+#'
+#' @param effort
+#' @param file_set_directory
+#' @param keep
+#'
+#' @return
+#' @export
+#'
+#' @examples
 crop_effort <- function(effort,
                         file_set_directory,
                         keep = "all_that_intersect" # or "only_fully_in"

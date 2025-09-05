@@ -14,9 +14,9 @@ create_grid <- function(effort,
                          bbox_grid = NULL,
                          sea = NULL,
                          country = NULL) {
-  # library(stars)
-  # library(sf)
-  # library(raster)
+  # pkg::fun(stars)
+  # pkg::fun(sf)
+  # pkg::fun(raster)
 
   bb <- st_bbox(effort)
   bb[1] <- bb[1] - resolution/2

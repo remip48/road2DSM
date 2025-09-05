@@ -16,15 +16,15 @@ extract_effort <- function(effort,
                            try_to_combine_filetsets = T,
                            n_cores = NULL,
                            outfile = "log.txt") {
-  # library(sf)
-  # library(dplyr)
-  # library(raster)
-  # library(stars)
-  # library(terra)
-  # library(lubridate)
-  # library(purrr)
-  # library(doParallel)
-  # library(stringr)
+  # pkg::fun(sf)
+  # pkg::fun(dplyr)
+  # pkg::fun(raster)
+  # pkg::fun(stars)
+  # pkg::fun(terra)
+  # pkg::fun(lubridate)
+  # pkg::fun(purrr)
+  # pkg::fun(doParallel)
+  # pkg::fun(stringr)
 
   if (try_to_combine_filetsets) {
     cat("Will try to combine the file_set together.\n")

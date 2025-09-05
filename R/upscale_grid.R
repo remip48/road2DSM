@@ -9,9 +9,9 @@
 #' @examples
 upscale_grid <- function(grid,
                          resolution) {
-  # library(stars)
-  # library(sf)
-  # library(raster)
+  # pkg::fun(stars)
+  # pkg::fun(sf)
+  # pkg::fun(raster)
 
   bb <- st_bbox(grid)
 

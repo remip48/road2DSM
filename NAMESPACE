@@ -2,6 +2,7 @@
 
 export(create_grid)
 export(create_soap)
+export(crop_effort)
 export(extract_effort)
 export(extract_grid)
 export(extract_nc)

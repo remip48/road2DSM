@@ -7,14 +7,6 @@
 create_soap(n, target_study_area, data, keep_point = 1, n_try = 25)
 }
 \arguments{
-\item{n}{}
-
-\item{target_study_area}{}
-
-\item{data}{}
-
-\item{keep_point}{}
-
 \item{n_try}{}
 }
 \description{

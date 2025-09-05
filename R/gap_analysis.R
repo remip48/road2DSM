@@ -46,11 +46,12 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
   }
 
   ## this function is adapted to the type of data of ITAW.
-  # library(dsmextra)     # Extrapolation toolkit for ecological models
-  # library(raster)       # Geographic data analysis and modeling
-  # library(tidyverse)    # Packages for data science
-  # library(magrittr)
-  # library(colorspace)
+  # pkg::fun(dsmextra)     # Extrapolation toolkit for ecological models
+  # pkg::fun(raster)       # Geographic data analysis and modeling
+  # pkg::fun(tidyverse)    # Packages for data science
+  # pkg::fun(magrittr)
+  # pkg::fun(colorspace)
+  # # pkg::fun(patchwork)
 
   cat("Create regular grid on crs =", crs, "\nIf other crs is targetted, please modify in function arguments.\n")
 
@@ -128,20 +129,20 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
 
     knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE
     )
-    # library(mgcv)
-    # library(gratia)
-    # library(dplyr)
-    # library(ggplot2)
-    # library(ggnewscale)
-    # library(tidyr)
-    # library(viridis)
-    # library(knitr)
-    # library(units)
-    # library(doParallel)
-    # library(stringr)
-    # library(sf)
-    # library(purrr)
-    # library(rnaturalearth)
+    # # # pkg::fun(mgcv)
+    # pkg::fun(gratia)
+    # pkg::fun(dplyr)
+    # pkg::fun(ggplot2)
+    # pkg::fun(ggnewscale)
+    # pkg::fun(tidyr)
+    # pkg::fun(viridis)
+    # pkg::fun(knitr)
+    # pkg::fun(units)
+    # pkg::fun(doParallel)
+    # pkg::fun(stringr)
+    # pkg::fun(sf)
+    # pkg::fun(purrr)
+    # # pkg::fun(rnaturalearth)
   })
 
   ##############

@@ -236,7 +236,7 @@ run_all_DSM <- function (segdata_obs,
         i <- i + 1L
       }
     }
-    # library(tidyr)
+    # pkg::fun(tidyr)
     out <- out[, !is.na(out[1, ])]
 
     if (simplify) {

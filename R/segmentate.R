@@ -34,7 +34,7 @@ segmentate <- function(effort,
                        sf_linestring=F,
                        plot = T) {
 
-  # library(patchwork)
+  # pkg::fun(patchwork)
 
   ##--------------------------------------------------------------------------------------------------------
   ## SCRIPT : transect segmentize
@@ -83,15 +83,15 @@ segmentate <- function(effort,
   .segmentate<-function(DATA,LEG="Leg",LENGTH=5,TOLERANCE=0,MIN_SEG_LENGTH=2.5,CRS=4326,bad_conditions=c("ll", "lx", "xl", "xx", "pp", "lp", "pl", "xp", "px",""),
                        conditions="subj",MINROW=1,MAXDIST=2.5,COORD_COL=c('lon','lat'),SEED=1234,sf_linestring=F){
 
-    load_packages <- function(p) {
-      if (p %in% rownames(installed.packages())) {
-        library(p, character.only = TRUE)
-      } else {
-        install.packages(p)
-        library(p, character.only = TRUE)
-      }
-    }
-    lapply(c("sf", "dplyr", "lwgeom", "purrr"), load_packages)
+    # load_packages <- function(p) {
+    #   if (p %in% rownames(installed.packages())) {
+    #     # pkg::fun(p, character.only = TRUE)
+    #   } else {
+    #     install.packages(p)
+    #     # pkg::fun(p, character.only = TRUE)
+    #   }
+    # }
+    # lapply(c("sf", "dplyr", "lwgeom", "purrr"), load_packages)
     # if (parallelize) {load_packages("doParallel")}
 
     cat("Data must be ordered by time firstly\n")

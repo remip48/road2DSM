@@ -1,35 +1,47 @@
-Type: Package
 Package: road2DSM
-Title: What the Package Does (Title Case)
-Version: 0.1.0
-Author: Who wrote it
-Maintainer: The package maintainer <yourself@somewhere.net>
-Description: More about what it does (maybe more than one line) Use four
-    spaces when indenting paragraphs within the Description.
-License: MIT + file LICENSE
+Title: road2DSM
+Version: 0.0.0.9000
+Authors@R: c(
+    person("Rémi", "Pigeault", , "remi.pigeault@tiho-hannover.de", role = c("aut", "cre")),
+    person("Vincent", "Benoit", , "vincent.benoit@tiho-hannover.de", role = "ctb"),
+    person("Nadya Carolina", "Ramirez-Martinez", , "Nadya.Carolina.Ramirez.Martinez@tiho-hannover.de", role = "ctb"),
+    person("Anita", "Gilles", , "anita.gilles@tiho-hannover.de", role = "ctb"),
+    person("Matthieu", "Authier", , "matthieu.authier@univ-lr.fr", role = "ctb")
+  )
+Description: Functions to extract covariates from NC files on effort &
+    prediction grids for density surface modelling. Create prediction grid
+    in flexible way, fit models and write comprehensive overview of model
+    comparison after model fitting.
+License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
+    license
+URL: https://github.com/remip48/road2DSM
+BugReports: https://github.com/remip48/road2DSM/issues
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.1
 Imports: 
-    abind,
-    assertthat,
-    cli,
+    colorspace,
     doParallel,
     dplyr,
-    foreach,
+    dsmextra,
     ggnewscale,
+    ggplot2,
     gratia,
     knitr,
-    loo,
     lubridate,
+    lwgeom,
+    magrittr,
     MASS,
     mgcv,
-    mvtnorm,
-    qpcR,
+    patchwork,
+    purrr,
     raster,
+    rmapshaper,
     rmarkdown,
     sf,
+    stars,
     stringr,
-    tweedie,
+    tidyr,
+    timeDate,
     units,
     viridis
-Encoding: UTF-8
-LazyData: true
-RoxygenNote: 7.3.1

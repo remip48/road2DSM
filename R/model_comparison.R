@@ -110,21 +110,21 @@ model_comparison <- function(run_models, # output from run_all_DSM
       dplyr::summarise(do_union = F) %>%
       st_cast("MULTIPOLYGON")
   }
-  # library(rmarkdown)
-  # library(mgcv)
-  # library(gratia)
-  # library(dplyr)
-  # library(ggplot2)
-  # library(ggnewscale)
-  # library(tidyr)
-  # library(viridis)
-  # library(knitr)
-  # library(units)
-  # library(doParallel)
-  # library(stringr)
-  # library(sf)
-  # library(purrr)
-  # library(rnaturalearth)
+  # pkg::fun(rmarkdown)
+  # pkg::fun(mgcv)
+  # pkg::fun(gratia)
+  # pkg::fun(dplyr)
+  # pkg::fun(ggplot2)
+  # pkg::fun(ggnewscale)
+  # pkg::fun(tidyr)
+  # pkg::fun(viridis)
+  # pkg::fun(knitr)
+  # pkg::fun(units)
+  # pkg::fun(doParallel)
+  # pkg::fun(stringr)
+  # pkg::fun(sf)
+  # pkg::fun(purrr)
+  # pkg::fun(rnaturalearth)
 
   if (is.null(n_cores)) {
     n_cores <- detectCores() - 1
@@ -136,20 +136,20 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
     knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE
     )
-    # library(mgcv)
-    # library(gratia)
-    # library(dplyr)
-    # library(ggplot2)
-    # library(ggnewscale)
-    # library(tidyr)
-    # library(viridis)
-    # library(knitr)
-    # library(units)
-    # library(doParallel)
-    # library(stringr)
-    # library(sf)
-    # library(purrr)
-    # library(rnaturalearth)
+    # pkg::fun(mgcv)
+    # pkg::fun(gratia)
+    # pkg::fun(dplyr)
+    # pkg::fun(ggplot2)
+    # pkg::fun(ggnewscale)
+    # pkg::fun(tidyr)
+    # pkg::fun(viridis)
+    # pkg::fun(knitr)
+    # pkg::fun(units)
+    # pkg::fun(doParallel)
+    # pkg::fun(stringr)
+    # pkg::fun(sf)
+    # pkg::fun(purrr)
+    # pkg::fun(rnaturalearth)
   })
   ##############
   obsn_chunk <- quote({
@@ -804,7 +804,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
     )
 
     chunk_bias <- quote({
-      library(MASS)
+      # pkg::fun(MASS)
 
       calibdata <- seg_data %>%
         as.data.frame()
@@ -1519,7 +1519,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
           labs(title = paste0("Model ", i, ": CV"))
 
         if (any(summary_abund_percell$Max == Inf)) {
-          library(ggnewscale)
+          # pkg::fun(ggnewscale)
 
           infvalue <- summary_abund_percell %>%
             dplyr::filter(Max == Inf)

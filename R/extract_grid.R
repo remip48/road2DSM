@@ -29,16 +29,16 @@ extract_grid <- function(grid,
   } else {
     cat("File_set won't be combined together before extraction. Might be longer if grids are actually similar.\n")
   }
-  # library(sf)
-  # library(dplyr)
-  # library(raster)
-  # library(stars)
-  # library(terra)
-  # library(lubridate)
-  # library(purrr)
-  # library(doParallel)
-  # library(stringr)
-  # library(timeDate)
+  # pkg::fun(sf)
+  # pkg::fun(dplyr)
+  # pkg::fun(raster)
+  # pkg::fun(stars)
+  # pkg::fun(terra)
+  # pkg::fun(lubridate)
+  # pkg::fun(purrr)
+  # pkg::fun(doParallel)
+  # pkg::fun(stringr)
+  # pkg::fun(timeDate)
 
   list_set <- list.files(file_set_directory)
   list_set <- list_set[str_detect(list_set, "file_set_")]
