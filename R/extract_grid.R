@@ -161,30 +161,43 @@ extract_grid <- function(grid,
           while (i <= (length(out_grid) - 1)) {
             j <- i + 1
             while (j <= length(out_grid)) {
-              if (all(out_grid[[i]]$lon_cent == out_grid[[j]]$lon_cent) &
-                  all(out_grid[[i]]$lat_cent == out_grid[[j]]$lat_cent)) {
+              if (all(unique(paste(floor(out_grid[[i]]$lat_cent*10^5)/10^5,
+                                   floor(out_grid[[i]]$lon_cent*10^5)/10^5)) %in% unique(paste(floor(out_grid[[i]]$lat_cent*10^5)/10^5,
+                                                                                               floor(out_grid[[i]]$lon_cent*10^5)/10^5)))) {
+                # if (all(out_grid[[i]]$lon_cent == out_grid[[j]]$lon_cent) &
+              #     all(out_grid[[i]]$lat_cent == out_grid[[j]]$lat_cent)) {
 
                 out_grid[[i]] <- out_grid[[i]] %>%
+                  dplyr::mutate(flon = floor(lon_cent*10^5), flat = floor(lat_cent*10^5)) %>%
                   left_join(out_grid[[j]] %>%
                               st_drop_geometry() %>%
-                              dplyr::select(lon_cent, lat_cent, all_of(colnames(.)[!(colnames(.) %in% colnames(out_grid[[i]]))])),
-                            by = c("lon_cent", "lat_cent")) %>%
+                              dplyr::mutate(flon = floor(lon_cent*10^5), flat = floor(lat_cent*10^5)) %>%
+                              dplyr::select(flon, flat, all_of(colnames(.)[!(colnames(.) %in% colnames(out_grid[[i]]))])),
+                            by = c("flon", "flat")) %>%
+                  dplyr::select(-c(flon, flat)) %>%
                   st_cast()
 
                 out_grid <- out_grid[-j]
                 # cat("Joined ")
-              } else if (any(paste(out_grid[[i]]$lon_cent, out_grid[[i]]$lat_cent) %in% paste(out_grid[[j]]$lon_cent, out_grid[[j]]$lat_cent))) {
-                out_grid[[i]] <- out_grid[[i]] %>%
-                  left_join(out_grid[[j]] %>%
-                              st_drop_geometry() %>%
-                              dplyr::select(lon_cent, lat_cent, all_of(colnames(.)[!(colnames(.) %in% colnames(out_grid[[i]]))])),
-                            by = c("lon_cent", "lat_cent")) %>%
-                  st_cast()
-
-                out_grid[[j]] <- out_grid[[j]] %>%
-                  dplyr::filter(!(paste(lon_cent, lat_cent) %in% paste(out_grid[[i]]$lon_cent, out_grid[[i]]$lat_cent)))
-
-                j <- j + 1
+              # } else if (any(unique(paste(floor(out_grid[[i]]$lat_cent*10^5)/10^5,
+              #                             floor(out_grid[[i]]$lon_cent*10^5)/10^5)) %in% unique(paste(floor(out_grid[[i]]$lat_cent*10^5)/10^5,
+              #                                                                                         floor(out_grid[[i]]$lon_cent*10^5)/10^5)))) {
+              #   out_grid[[i]] <- out_grid[[i]] %>%
+              #     dplyr::mutate(flon = floor(lon_cent*10^5), flat = floor(lat_cent*10^5)) %>%
+              #     left_join(out_grid[[j]] %>%
+              #                 st_drop_geometry() %>%
+              #                 dplyr::mutate(flon = floor(lon_cent*10^5), flat = floor(lat_cent*10^5)) %>%
+              #                 dplyr::select(flon, flat, all_of(colnames(.)[!(colnames(.) %in% colnames(out_grid[[i]]))])),
+              #               by = c("flon", "flat")) %>%
+              #     dplyr::select(-c(flon, flat)) %>%
+              #     st_cast()
+              #
+              #   out_grid[[j]] <- out_grid[[j]] %>%
+              #     dplyr::filter(!(paste(floor(lat_cent*10^5)/10^5,
+              #                           floor(lon_cent*10^5)/10^5) %in% paste(floor(out_grid[[i]]$lat_cent*10^5)/10^5,
+              #                                                                 floor(out_grid[[i]]$lon_cent*10^5)/10^5)))
+              #
+              #   j <- j + 1
               } else {
                 j <- j + 1
               }
