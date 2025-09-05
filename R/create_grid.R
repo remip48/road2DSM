@@ -9,7 +9,7 @@
 #' @export
 #'
 #' @examples
-create_gridi <- function(effort,
+create_grid <- function(effort,
                          resolution,
                          bbox_grid = NULL,
                          sea = NULL,
