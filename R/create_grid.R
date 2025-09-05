@@ -9,25 +9,29 @@
 #' @export
 #'
 #' @examples
-create_grid <- function(effort,
-                        resolution,
-                        bbox = NULL,
-                        sea = NULL,
-                        country = NULL) {
+create_gridi <- function(effort,
+                         resolution,
+                         bbox_grid = NULL,
+                         sea = NULL,
+                         country = NULL) {
   # library(stars)
   # library(sf)
   # library(raster)
 
   bb <- st_bbox(effort)
+  bb[1] <- bb[1] - resolution/2
+  bb[2] <- bb[2] - resolution/2
 
-  if (all(!is.null(bbox))) {
-    if (length(bbox) != 4) {
-      cat("bbox needs 4 elements: xmin, ymin, xmax, ymax. If you want to use the bbox of the effort for one of them, just let NA in it respective value.\n")
+  cat("If bbox_grid = NULL, grid will automatically be extended from st_bbox(effort) ± resolution/2.\n")
+
+  if (all(!is.null(bbox_grid))) {
+    if (length(bbox_grid) != 4) {
+      cat("bbox_grid needs 4 elements: xmin, ymin, xmax, ymax. If you want to use the bbox_grid of the effort for one of them, just let NA in it respective value.\n")
     }
 
     for (i in 1:4) {
-      if (!is.na(bbox[i])) {
-        bb[i] <- bbox[i]
+      if (!is.na(bbox_grid[i])) {
+        bb[i] <- bbox_grid[i]
       }
     }
   }
@@ -48,7 +52,8 @@ create_grid <- function(effort,
                             crs = st_crs(effort)$proj4string
   ) %>%
     st_as_stars() %>%
-    st_as_sf()
+    st_as_sf() %>%
+    st_transform(crs = st_crs(effort))
 
   if (all(!is.null(sea))) {
     sea <- sea %>%
@@ -82,7 +87,7 @@ create_grid <- function(effort,
       #                                country,
       #                               sparse = F))) %>%
       st_difference(.,
-                      country) %>%
+                    country) %>%
       st_make_valid()
   }
 
