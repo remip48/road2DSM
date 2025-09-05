@@ -1,3 +1,24 @@
+#' Title
+#'
+#' @param effort
+#' @param LEG
+#' @param LENGTH
+#' @param TOLERANCE
+#' @param MIN_SEG_LENGTH
+#' @param CRS
+#' @param bad_conditions
+#' @param conditions
+#' @param MINROW
+#' @param MAXDIST
+#' @param COORD_COL
+#' @param SEED
+#' @param sf_linestring
+#' @param plot
+#'
+#' @return
+#' @export
+#'
+#' @examples
 segmentate <- function(effort,
                        LEG="Leg",
                        LENGTH=10,
@@ -792,11 +813,14 @@ segmentate <- function(effort,
       # geom_point(data = effort_seg_ref$data_segmented, aes(x = lon, y = lat), color = "red", size = 2) +
       # geom_point(data = effort, aes(x = lon, y = lat), color = "purple") +
       geom_sf(data = effort_sf_line, aes(color = label), show.legend = F, linewidth = 3) +
-      labs(title = paste0(LENGTH, " km segments:"))
+      labs(title = paste0(LENGTH, " km segments:")) +
+      theme_bw() +
+      theme(panel.background = element_rect(fill = "aliceblue"))
 
     p2 <- ggplot() +
       geom_histogram(data = effort, aes(x = distance)) +
-      labs(title = "Histogram of length from segmented Legs:")
+      labs(title = "Histogram of length from segmented Legs:") +
+      theme_bw()
 
     print((p1 | p2))
   }

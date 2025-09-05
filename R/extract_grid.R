@@ -201,8 +201,7 @@ extract_grid <- function(grid,
             ungroup()
 
           return(grid %>%
-                   dplyr::mutate(file_set = f,
-                                 Xmin = gridcc$Xmin,
+                   dplyr::mutate(Xmin = gridcc$Xmin,
                                  Xmax = gridcc$Xmax,
                                  Ymin = gridcc$Ymin,
                                  Ymax = gridcc$Ymax) %>%
@@ -248,6 +247,11 @@ extract_grid <- function(grid,
                   st_drop_geometry() %>%
                   dplyr::mutate(date = d),
                 paste0(writing_directory, "/", today, "_grid_", d, ".rds"))
+
+        rm(out_grid)
+        rm(out)
+        gc()
+
       }
     }
 

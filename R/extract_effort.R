@@ -193,8 +193,7 @@ extract_effort <- function(effort,
           ungroup()
 
         return(grid %>%
-                 dplyr::mutate(file_set = f,
-                               Xmin = gridcc$Xmin,
+                 dplyr::mutate(Xmin = gridcc$Xmin,
                                Xmax = gridcc$Xmax,
                                Ymin = gridcc$Ymin,
                                Ymax = gridcc$Ymax) %>%

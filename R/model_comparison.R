@@ -1,3 +1,39 @@
+#' Title
+#'
+#' @param run_models
+#' @param seg_data
+#' @param variable
+#' @param effort_column
+#' @param version_preds
+#' @param output_file
+#' @param log1p_trans
+#' @param grid_folder
+#' @param static_grid
+#' @param prediction_folder
+#' @param block_file
+#' @param data_file
+#' @param sub_area_analysis_file
+#' @param study_area
+#' @param correct_bias
+#' @param save_results_bias_corrected
+#' @param use_threshold
+#' @param quantile_mgcv_fixed
+#' @param threshold
+#' @param breaks_plot
+#' @param labels_plot
+#' @param corr_groupsize
+#' @param response
+#' @param subspecies
+#' @param filter_year_month_not_in
+#' @param run_all
+#' @param outfile
+#' @param save_posterior_distribution
+#' @param n_cores
+#'
+#' @return
+#' @export
+#'
+#' @examples
 model_comparison <- function(run_models, # output from run_all_DSM
                                       seg_data, # segments used for run_all_DSM. Should not be an sf object.
                                       variable,

@@ -1,7 +1,27 @@
-gap_analysis <- function(run_models, # output from run_all_DSM
-                         seg_data, # segments used for run_all_DSM. Should not be an sf object.
+#' Title
+#'
+#' @param seg_data
+#' @param variable
+#' @param crs
+#' @param grid_resolution
+#' @param version_preds
+#' @param output_file
+#' @param grid_folder
+#' @param static_grid
+#' @param save_results_dsmextra
+#' @param study_area
+#' @param filter_year_month_not_in
+#' @param run_all
+#' @param outfile
+#' @param n_cores
+#'
+#' @return
+#' @export
+#'
+#' @examples
+gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not be an sf object.
                          variable,
-                         crs = crs,
+                         crs = 3035,
                          grid_resolution = NULL,
                          version_preds = as.character(lubridate::today()),
                          output_file = paste0(version_preds, "_gap_analysis"), # without extension, will be the name of html file
@@ -15,7 +35,7 @@ gap_analysis <- function(run_models, # output from run_all_DSM
                          n_cores = NULL) {
 
   if (is.null(grid_resolution)) {
-    stop("Please provide a value for grid_resolution used")
+    stop("Please provide a value c(res_x, res_y) for grid_resolution used")
   }
 
   if (!is.null(save_results_dsmextra)) {
@@ -32,7 +52,7 @@ gap_analysis <- function(run_models, # output from run_all_DSM
   # library(magrittr)
   # library(colorspace)
 
-  cat("Create ETRScrs regular grid. If other crs is targetted by the grid, please adapt the function script.\n")
+  cat("Create regular grid on crs =", crs, "\nIf other crs is targetted, please modify in function arguments.\n")
 
   static <- read_sf(paste0(grid_folder, "/", static_grid)) %>%
     st_transform(crs = crs) %>%
@@ -44,14 +64,16 @@ gap_analysis <- function(run_models, # output from run_all_DSM
 
   ####
   grid_ref <- (static %>%
-    dplyr::slice_max(area))[1,]
+                 dplyr::slice_max(area) %>%
+                 dplyr::mutate(X = round(X, 5),
+                               Y = round(Y, 5)))[1,]
 
-  listX <- seq(grid_ref$X - grid_resolution * ceiling(abs(grid_ref$X - min(static$X)) / grid_resolution),
-               grid_ref$X + grid_resolution * ceiling(abs(grid_ref$X - max(static$X)) / grid_resolution),
-               grid_resolution)
-  listY <- seq(grid_ref$Y - grid_resolution * ceiling(abs(grid_ref$Y - min(static$Y)) / grid_resolution),
-               grid_ref$Y + grid_resolution * ceiling(abs(grid_ref$Y - max(static$Y)) / grid_resolution),
-               grid_resolution)
+  listX <- seq(grid_ref$X - grid_resolution[1] * ceiling(abs(grid_ref$X - min(static$X)) / grid_resolution[1]),
+               grid_ref$X + grid_resolution[1] * ceiling(abs(grid_ref$X - max(static$X)) / grid_resolution[1]),
+               grid_resolution[1])
+  listY <- seq(grid_ref$Y - grid_resolution[2] * ceiling(abs(grid_ref$Y - min(static$Y)) / grid_resolution[2]),
+               grid_ref$Y + grid_resolution[2] * ceiling(abs(grid_ref$Y - max(static$Y)) / grid_resolution[2]),
+               grid_resolution[2])
 
   static <- static %>%
     group_by(id) %>%
@@ -69,7 +91,10 @@ gap_analysis <- function(run_models, # output from run_all_DSM
       dplyr::summarise(do_union = F) %>%
       st_cast("MULTIPOLYGON")
 
-    static <- st_intersection(static, study_area) %>%
+    static <- static %>%
+      dplyr::filter(c(st_intersects(.,
+                                    study_area,
+                                    sparse = F))) %>%
       # dplyr::mutate(area = units::drop_units(st_area(.))) %>%
       st_cast()
   }
@@ -79,20 +104,19 @@ gap_analysis <- function(run_models, # output from run_all_DSM
     dplyr::summarise(do_union = T) %>%
     st_cast("MULTIPOLYGON")
 
-  static_sf <- static
+  static_sf <- static %>%
+    dplyr::select(id)
 
   static <- static %>%
     st_drop_geometry()
 
-  segs <- seg_data %>%
+  seg_data <- seg_data %>%
     dplyr::select(year, date, all_of(c(variable))) %>%
     drop_na() %>%
     as.data.frame()
 
   ls <- list.files(grid_folder)
   ls <- ls[ls != static_grid]
-
-  covariates <- variable
 
   if (is.null(n_cores)) {
     n_cores <- detectCores() - 1
@@ -122,7 +146,7 @@ gap_analysis <- function(run_models, # output from run_all_DSM
 
   ##############
   run_dsmextra_chunk <- quote({
-    cat("\n\nCovariates used for gap analysis: all (", paste(covariates, collapse = ", "), ")<br><br>\n\n")
+    cat("\n\nvariable used for gap analysis: all (", paste(variable, collapse = ", "), ")<br><br>\n\n")
 
     if (!file.exists(paste0(save_results_dsmextra, "/", version_preds, "_dsmextra.RData"))) {
       # list_extrapolation <- list()
@@ -131,38 +155,37 @@ gap_analysis <- function(run_models, # output from run_all_DSM
       # for (l in ls) {
       output <- foreach(l = ls,
                         .packages = c("dplyr", "sf", "raster", "dsmextra"),
-                        .noexport = ls()[!(ls() %in% c("grid_folder", "static", "variable", "covariates", "sfcrs"))]
+                        .noexport = ls()[!(ls() %in% c("grid_folder", "static", "variable", "variable", "sfcrs", "listX", "listY"))]
                         ) %dopar% {
-
-                          predgrid <- readRDS(paste0(grid_folder, "/", l)) %>%
-                            st_drop_geometry()
-
                           predgrid <- static %>%
                             dplyr::select(id, all_of(variable[variable %in% colnames(static)]), X, Y) %>%
-                            left_join(predgrid,
+                            left_join(readRDS(paste0(grid_folder, "/", l)) %>%
+                                        st_drop_geometry() %>%
+                                        dplyr::select(id, all_of(colnames(.)[!(colnames(.) %in% c("id", variable[variable %in% colnames(static)], "X", "Y"))])),
                                       by = "id") %>%
-                            dplyr::select(id, all_of(variable), X, Y) %>%
+                            dplyr::select(id, x, y, all_of(variable)) %>%
                             as.data.frame() %>%
                             drop_na()
 
-                          extrapolation <- compute_extrapolation(samples = segs,
-                                                                 covariate.names = covariates,
+                          extrapolation <- compute_extrapolation(samples = seg_data,
+                                                                 covariate.names = variable,
                                                                  prediction.grid = predgrid %>%
-                                                                   dplyr::select(x, y, all_of(covariates)),
+                                                                   dplyr::select(x, y, all_of(variable)),
                                                                  coordinate.system = sfcrs
                           )
 
-                          nearby <- compute_nearby(samples = segs,
+                          nearby <- compute_nearby(samples = seg_data,
                                                    prediction.grid = predgrid %>%
-                                                     dplyr::select(x, y, all_of(covariates)),
-                                                   coordinate.system = aftt_crs,
-                                                   covariate.names = covariates,
+                                                     dplyr::select(x, y, all_of(variable)),
+                                                   coordinate.system = sfcrs,
+                                                   covariate.names = variable,
                                                    nearby = 1)
 
                           values_extra <- predgrid %>%
                             dplyr::select(id, y, x) %>%
                             left_join(extrapolation$data$all, by = c("x", "y")) %>%
-                            dplyr::mutate(date = str_remove_all(str_split_1(l, "_")[3], fixed(".rds"))) %>%
+                            dplyr::mutate(date = str_remove_all(str_split_1(l, "_")[3], fixed(".rds")),
+                                          year = as.numeric(lubridate::year(unique(date)))) %>%
                             st_drop_geometry()
 
                            values_nearby <- predgrid %>%
@@ -171,33 +194,36 @@ gap_analysis <- function(run_models, # output from run_all_DSM
                                          st_as_stars() %>%
                                          st_as_sf() %>%
                                          st_centroid() %>%
-                                         dplyr::mutate(x = round(st_coordinates(.)[,1], 0),
-                                                       y = round(st_coordinates(.)[,2], 0)), by = c("x", "y")) %>%
-                            dplyr::mutate(date = str_remove_all(str_split_1(l, "_")[3], fixed(".rds"))) %>%
+                                         dplyr::mutate(x = st_coordinates(.)[,1],
+                                                       y = st_coordinates(.)[,2]) %>%
+                                         group_by(x, y) %>%
+                                         dplyr::mutate(x = listX[which.min(abs(unique(x) - listX))],
+                                                       y = listY[which.min(abs(unique(y) - listY))]) %>%
+                                         ungroup(), by = c("x", "y")) %>%
+                            dplyr::mutate(date = str_remove_all(str_split_1(l, "_")[3], fixed(".rds")),
+                                          year = as.numeric(lubridate::year(unique(date)))) %>%
                             st_drop_geometry()
 
                            return(list(extrapolations = values_extra,
                                        nearby = values_nearby))
                         }
 
-      values_extra <- do.call("rbind", map(output, function(x) {x$extrapolations})) %>%
-        dplyr::mutate(year = as.numeric(lubridate::year(date)))
+      values_extra <- do.call("rbind", lapply(output, function(x) {x$extrapolations}))
 
-      values_nearby <- do.call("rbind", map(output, function(x) {x$nearby})) %>%
-        dplyr::mutate(year = as.numeric(lubridate::year(date)))
+      values_nearby <- do.call("rbind", lapply(output, function(x) {x$nearby}))
 
-      save(values_extra, values_nearby,
-           file = paste0(save_results_dsmextra, "/", version_preds, "_dsmextra.RData"))
+      if (!is.null(save_results_dsmextra)) {
+        save(values_extra, values_nearby,
+             file = paste0(save_results_dsmextra, "/", version_preds, "_dsmextra.RData"))
+      }
     } else {
       load(file = paste0(save_results_dsmextra, "/", version_preds, "_dsmextra.RData"))
     }
 
     values_extra_ref <- static_sf %>%
-      dplyr::select(id) %>%
       left_join(values_extra, by = "id")
 
     values_nearby_ref <- static_sf %>%
-      dplyr::select(id) %>%
       left_join(values_nearby, by = "id")
 
     for (yr in sort(unique(values_extra_ref$year))) {
@@ -209,7 +235,7 @@ gap_analysis <- function(run_models, # output from run_all_DSM
         pull(ExDet)
 
       print(ggplot() +
-              geom_sf(data = countries, fill = "white", alpha = 0.1) +
+              geom_sf(data = study_area, fill = "white", alpha = 0.1) +
               geom_sf(data = values_extra %>%
                         dplyr::filter(ExDet < 0),
                       aes(fill = -ExDet, color = -ExDet)) +
@@ -253,16 +279,16 @@ gap_analysis <- function(run_models, # output from run_all_DSM
 
     }
 
-    # cat("## Most influential covariates\n<br>")
+    # cat("## Most influential variable\n<br>")
 
-    groups <- list(c("eke", "mlotst", "nppv"),
-                   c("thetao", "gradthetao", "grad2thetao"),
-                   c("dist_to_sandeel", "diffT", "gradSST"),
-                   c("bathy", "slope", "distance_to_coast"))
+    # groups <- list(c("eke", "mlotst", "nppv"),
+    #                c("thetao", "gradthetao", "grad2thetao"),
+    #                c("dist_to_sandeel", "diffT", "gradSST"),
+    #                c("bathy", "slope", "distance_to_coast"))
 
     values_extra_ref <- values_extra_ref %>%
       dplyr::filter(mic != 0) %>%
-      dplyr::mutate(mic = covariates[mic])
+      dplyr::mutate(mic = variable[mic])
 
     list_mic <- unique(values_extra_ref$mic)
 
@@ -272,95 +298,107 @@ gap_analysis <- function(run_models, # output from run_all_DSM
         dplyr::filter(year == yr)
 
       print(ggplot() +
-              # geom_sf(data = countries, fill = "white", alpha = 0.1) +
-              #     geom_sf(data = values_extra %>%
-              #               dplyr::filter(mic != 0),
-              #         aes(fill = factor(covariates[mic])), color = NA) +
-              #   scale_fill_discrete_qualitative(name = NULL) +
-              geom_sf(data = countries, fill = "white", alpha = 0.1) +
+              geom_sf(data = study_area, fill = "white", alpha = 0.1) +
               geom_sf(data = values_mic %>%
-                        dplyr::filter(mic %in% groups[[1]]) %>%
-                        dplyr::mutate(mic = factor(mic, levels = (groups[[1]])[groups[[1]] %in% list_mic])),
+                        dplyr::mutate(mic = factor(mic, levels = variable)),
                       aes(fill = mic, color = mic)) +
-              scale_fill_manual(values = sequential_hcl(
-                n        = 4,       # number of discrete categories you need
-                palette  = "Greens 3", # base palette name
-                c        = 100,     # chroma (colorfulness)
-                l        = c(35, 90) # lightness range (lower start = darker start)
-              )[-4], name = NULL, drop = F) +
-              scale_color_manual(values = sequential_hcl(
-                n        = 4,       # number of discrete categories you need
-                palette  = "Greens 3", # base palette name
-                c        = 100,     # chroma (colorfulness)
-                l        = c(35, 90) # lightness range (lower start = darker start)
-              )[-4], name = NULL, drop = F) +
-
-              new_scale_fill() +
-              new_scale_color() +
-              geom_sf(data = values_mic %>%
-                        dplyr::filter(mic %in% groups[[2]]) %>%
-                        dplyr::mutate(mic = factor(mic, levels = (groups[[2]])[groups[[2]] %in% list_mic])),
-                      aes(fill = mic, color = mic)) +
-              scale_fill_manual(values = sequential_hcl(
-                n        = 4,       # number of discrete categories you need
-                palette  = "Reds 3", # base palette name
-                c        = 100,     # chroma (colorfulness)
-                l        = c(40, 90) # lightness range (lower start = darker start)
-              )[-4], name = NULL, drop = F) +
-              scale_color_manual(values = sequential_hcl(
-                n        = 4,       # number of discrete categories you need
-                palette  = "Reds 3", # base palette name
-                c        = 100,     # chroma (colorfulness)
-                l        = c(40, 90) # lightness range (lower start = darker start)
-              )[-4], name = NULL, drop = F) +
-
-              new_scale_fill() +
-              new_scale_color() +
-              geom_sf(data = values_mic %>%
-                        dplyr::filter(mic %in% groups[[3]]) %>%
-                        dplyr::mutate(mic = factor(mic, levels = (groups[[3]])[groups[[3]] %in% list_mic])),
-                      aes(fill = mic, color = mic)) +
-              scale_fill_manual(values = sequential_hcl(
-                n        = 4,       # number of discrete categories you need
-                palette  = "YlOrBr", # base palette name
-                c        = 100,     # chroma (colorfulness)
-                l        = c(40, 95) # lightness range (lower start = darker start)
-              )[-4], name = NULL, drop = F) +
-              scale_color_manual(values = sequential_hcl(
-                n        = 4,       # number of discrete categories you need
-                palette  = "YlOrBr", # base palette name
-                c        = 100,     # chroma (colorfulness)
-                l        = c(40, 95) # lightness range (lower start = darker start)
-              )[-4], name = NULL, drop = F) +
-
-              new_scale_fill() +
-              new_scale_color() +
-              geom_sf(data = values_mic %>%
-                        dplyr::filter(mic %in% groups[[4]]) %>%
-                        dplyr::mutate(mic = factor(mic, levels = (groups[[4]])[groups[[4]] %in% list_mic])),
-                      aes(fill = mic, color = mic)) +
-              scale_fill_manual(values = sequential_hcl(
-                n        = 4,       # number of discrete categories you need
-                palette  = "Blues 3", # base palette name
-                c        = 100,     # chroma (colorfulness)
-                l        = c(16, 95) # lightness range (lower start = darker start)
-              )[-4], name = NULL, drop = F) +
-              scale_color_manual(values = sequential_hcl(
-                n        = 4,       # number of discrete categories you need
-                palette  = "Blues 3", # base palette name
-                c        = 100,     # chroma (colorfulness)
-                l        = c(16, 95) # lightness range (lower start = darker start)
-              )[-4], name = NULL, drop = F) +
-
+              scale_fill_viridis_d() +
+              scale_color_viridis_d() +
               facet_wrap(~ date, ncol = 10) +
               theme_bw() +
               theme(panel.background = element_rect(fill = "white"),
                     legend.position = "top",
                     legend.direction = "horizontal") +
-              labs(title = paste(yr, ":", "Most influential covariates on extrapolations")) +
+              labs(title = paste(yr, ":", "Most influential variable on extrapolations")) +
               coord_sf(xlim = c(min(static$X), max(static$X)),
                        ylim = c(min(static$Y), max(static$Y)),
                        expand = F))
+
+      # print(ggplot() +
+      #         geom_sf(data = study_area, fill = "white", alpha = 0.1) +
+      #         geom_sf(data = values_mic %>%
+      #                   dplyr::filter(mic %in% groups[[1]]) %>%
+      #                   dplyr::mutate(mic = factor(mic, levels = (groups[[1]])[groups[[1]] %in% list_mic])),
+      #                 aes(fill = mic, color = mic)) +
+      #         scale_fill_manual(values = sequential_hcl(
+      #           n        = 4,       # number of discrete categories you need
+      #           palette  = "Greens 3", # base palette name
+      #           c        = 100,     # chroma (colorfulness)
+      #           l        = c(35, 90) # lightness range (lower start = darker start)
+      #         )[-4], name = NULL, drop = F) +
+      #         scale_color_manual(values = sequential_hcl(
+      #           n        = 4,       # number of discrete categories you need
+      #           palette  = "Greens 3", # base palette name
+      #           c        = 100,     # chroma (colorfulness)
+      #           l        = c(35, 90) # lightness range (lower start = darker start)
+      #         )[-4], name = NULL, drop = F) +
+      #
+      #         new_scale_fill() +
+      #         new_scale_color() +
+      #         geom_sf(data = values_mic %>%
+      #                   dplyr::filter(mic %in% groups[[2]]) %>%
+      #                   dplyr::mutate(mic = factor(mic, levels = (groups[[2]])[groups[[2]] %in% list_mic])),
+      #                 aes(fill = mic, color = mic)) +
+      #         scale_fill_manual(values = sequential_hcl(
+      #           n        = 4,       # number of discrete categories you need
+      #           palette  = "Reds 3", # base palette name
+      #           c        = 100,     # chroma (colorfulness)
+      #           l        = c(40, 90) # lightness range (lower start = darker start)
+      #         )[-4], name = NULL, drop = F) +
+      #         scale_color_manual(values = sequential_hcl(
+      #           n        = 4,       # number of discrete categories you need
+      #           palette  = "Reds 3", # base palette name
+      #           c        = 100,     # chroma (colorfulness)
+      #           l        = c(40, 90) # lightness range (lower start = darker start)
+      #         )[-4], name = NULL, drop = F) +
+      #
+      #         new_scale_fill() +
+      #         new_scale_color() +
+      #         geom_sf(data = values_mic %>%
+      #                   dplyr::filter(mic %in% groups[[3]]) %>%
+      #                   dplyr::mutate(mic = factor(mic, levels = (groups[[3]])[groups[[3]] %in% list_mic])),
+      #                 aes(fill = mic, color = mic)) +
+      #         scale_fill_manual(values = sequential_hcl(
+      #           n        = 4,       # number of discrete categories you need
+      #           palette  = "YlOrBr", # base palette name
+      #           c        = 100,     # chroma (colorfulness)
+      #           l        = c(40, 95) # lightness range (lower start = darker start)
+      #         )[-4], name = NULL, drop = F) +
+      #         scale_color_manual(values = sequential_hcl(
+      #           n        = 4,       # number of discrete categories you need
+      #           palette  = "YlOrBr", # base palette name
+      #           c        = 100,     # chroma (colorfulness)
+      #           l        = c(40, 95) # lightness range (lower start = darker start)
+      #         )[-4], name = NULL, drop = F) +
+      #
+      #         new_scale_fill() +
+      #         new_scale_color() +
+      #         geom_sf(data = values_mic %>%
+      #                   dplyr::filter(mic %in% groups[[4]]) %>%
+      #                   dplyr::mutate(mic = factor(mic, levels = (groups[[4]])[groups[[4]] %in% list_mic])),
+      #                 aes(fill = mic, color = mic)) +
+      #         scale_fill_manual(values = sequential_hcl(
+      #           n        = 4,       # number of discrete categories you need
+      #           palette  = "Blues 3", # base palette name
+      #           c        = 100,     # chroma (colorfulness)
+      #           l        = c(16, 95) # lightness range (lower start = darker start)
+      #         )[-4], name = NULL, drop = F) +
+      #         scale_color_manual(values = sequential_hcl(
+      #           n        = 4,       # number of discrete categories you need
+      #           palette  = "Blues 3", # base palette name
+      #           c        = 100,     # chroma (colorfulness)
+      #           l        = c(16, 95) # lightness range (lower start = darker start)
+      #         )[-4], name = NULL, drop = F) +
+      #
+      #         facet_wrap(~ date, ncol = 10) +
+      #         theme_bw() +
+      #         theme(panel.background = element_rect(fill = "white"),
+      #               legend.position = "top",
+      #               legend.direction = "horizontal") +
+      #         labs(title = paste(yr, ":", "Most influential variable on extrapolations")) +
+      #         coord_sf(xlim = c(min(static$X), max(static$X)),
+      #                  ylim = c(min(static$Y), max(static$Y)),
+      #                  expand = F))
 
     }
 
@@ -372,15 +410,15 @@ gap_analysis <- function(run_models, # output from run_all_DSM
         dplyr::filter(year == yr)
 
       print(ggplot() +
-              geom_sf(data = countries, fill = "white", alpha = 0.1) +
+              geom_sf(data = study_area, fill = "white", alpha = 0.1) +
               geom_sf(data = values_nearby,
                       aes(fill = perc_nearby, color = perc_nearby)) +
               scale_fill_viridis_c(name = "% nearby",
-                                   breaks = seq(0, floor(max(values_nearby_ref$perc_nearby, na.rm = T)), length = 4),
+                                   breaks = seq(0, floor(max(values_nearby_ref$perc_nearby, na.rm = T)*10)/10, length = 5),
                                    labels = function(breaks) {round(breaks, 0)},
                                    limits = c(0, max(values_nearby_ref$perc_nearby, na.rm = T))) +
               scale_color_viridis_c(name = "% nearby",
-                                    breaks = seq(0, floor(max(values_nearby_ref$perc_nearby, na.rm = T)), length = 4),
+                                    breaks = seq(0, floor(max(values_nearby_ref$perc_nearby, na.rm = T)*10)/10, length = 5),
                                     limits = c(0, max(values_nearby_ref$perc_nearby, na.rm = T)),
                                     guide = "none") +
               facet_wrap(~ date, ncol = 10) +
