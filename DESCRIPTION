@@ -12,8 +12,7 @@ Description: Functions to extract covariates from NC files on effort &
     prediction grids for density surface modelling. Create prediction grid
     in flexible way, fit models and write comprehensive overview of model
     comparison after model fitting.
-License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
-    license
+License: MIT + file LICENSE
 URL: https://github.com/remip48/road2DSM
 BugReports: https://github.com/remip48/road2DSM/issues
 Encoding: UTF-8

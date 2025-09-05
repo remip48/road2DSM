@@ -1559,11 +1559,11 @@ model_comparison <- function(run_models, # output from run_all_DSM
   rmarkdown::render(
     # input = file_name,
     input = tmp_md,
-    output_file = paste0(output_file, ".html"),
+    output_file = paste0(getwd(), "/", output_file, ".html"),
     quiet = TRUE
   )
 
-  message("HTML report generated: ", paste0(output_file, ".html"))
-  browseURL(output_file)
-  # invisible(output_file)
+  message("HTML report generated: ", paste0(getwd(), "/", output_file, ".html"))
+  browseURL(paste0(getwd(), "/", output_file, ".html"))
+  invisible(paste0(getwd(), "/", output_file, ".html"))
 }

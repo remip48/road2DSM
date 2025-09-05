@@ -610,4 +610,5 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
     gc()
   }
   return(NULL)
+  invisible("Finished")
 }

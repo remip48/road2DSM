@@ -436,6 +436,15 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
   ##############
 
   rmd_text <- c(
+    "---",
+    paste0("title: \"", "Gap analysis in the environmental space, based on dsmextra R-package:", "\""),
+    paste0("date: '`r Sys.Date()`'"),
+    "output: html_document",
+    "---",
+    ""
+  )
+
+  rmd_text <- c(
     rmd_text,
     "```{r run, echo=FALSE}",
     paste(deparse(run_preds_chunk), collapse = "\n"),
@@ -454,11 +463,11 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
   rmarkdown::render(
     # input = file_name,
     input = tmp_md,
-    output_file = paste0(output_file, ".html"),
+    output_file = paste0(getwd(), "/", output_file, ".html"),
     quiet = TRUE
   )
 
-  message("HTML report generated: ", paste0(output_file, ".html"))
-  browseURL(output_file)
-  # invisible(output_file)
+  message("HTML report generated: ", paste0(getwd(), "/", output_file, ".html"))
+  browseURL(paste0(getwd(), "/", output_file, ".html"))
+  invisible(paste0(getwd(), "/", output_file, ".html"))
 }
