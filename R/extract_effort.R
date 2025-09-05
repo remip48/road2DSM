@@ -112,25 +112,10 @@ extract_effort <- function(effort,
           }
         }
 
-        phycc <- phy %>%
-          st_coordinates(.) %>%
-          as.data.frame() %>%
-          group_by(L2) %>%
-          dplyr::summarise(Xmin = min(X), Xmax = max(X),
-                           Ymin = min(Y), Ymax = max(Y)) %>%
-          ungroup()
-
-        grid <- phy %>%
-          dplyr::mutate(file_set = f,
-                        Xmin = phycc$Xmin,
-                        Xmax = phycc$Xmax,
-                        Ymin = phycc$Ymin,
-                        Ymax = phycc$Ymax) %>%
-          dplyr::filter(Xmax >= st_bbox(out)[1] & Xmin <= st_bbox(out)[3] &
-                          Ymax >= st_bbox(out)[2] & Ymin <= st_bbox(out)[4]) %>%
-          st_cast()
-
-        return(grid)
+        return(phy %>%
+                 # dplyr::mutate(file_set = f) %>%
+                 # st_simplify() %>%
+                 st_cast())
       } else {
         return(NULL)
       }
@@ -197,6 +182,25 @@ extract_effort <- function(effort,
           i <- i + 1
         }
       }
+
+      out_grid <- lapply(out_grid, function(grid) {
+        gridcc <- grid %>%
+          st_coordinates(.) %>%
+          as.data.frame() %>%
+          group_by(L2) %>%
+          dplyr::summarise(Xmin = min(X), Xmax = max(X),
+                           Ymin = min(Y), Ymax = max(Y)) %>%
+          ungroup()
+
+        return(grid %>%
+                 dplyr::mutate(file_set = f,
+                               Xmin = gridcc$Xmin,
+                               Xmax = gridcc$Xmax,
+                               Ymin = gridcc$Ymin,
+                               Ymax = gridcc$Ymax) %>%
+                 dplyr::filter(Xmax >= st_bbox(out)[1] & Xmin <= st_bbox(out)[3] &
+                                 Ymax >= st_bbox(out)[2] & Ymin <= st_bbox(out)[4]))
+      })
 
       all_cols <- do.call("c", lapply(out_grid, function(x) {
         do.call("c", lapply(colnames(x), function(c) {
