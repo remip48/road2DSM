@@ -2,7 +2,7 @@
 % Please edit documentation in R/upscale_grid.R
 \name{upscale_grid}
 \alias{upscale_grid}
-\title{Title}
+\title{Upscale input grid to higher resolution}
 \usage{
 upscale_grid(grid, resolution)
 }
@@ -10,5 +10,5 @@ upscale_grid(grid, resolution)
 \item{resolution}{}
 }
 \description{
-Title
+Can be used on the nc file grid created by extract_nc. Resolution must be in the same unit than the input grid, for which the crs will be used to create the new grid.
 }

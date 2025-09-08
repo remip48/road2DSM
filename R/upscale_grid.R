@@ -1,4 +1,6 @@
-#' Title
+#' Upscale input grid to higher resolution
+#'
+#' Can be used on the nc file grid created by extract_nc. Resolution must be in the same unit than the input grid, for which the crs will be used to create the new grid.
 #'
 #' @param grid
 #' @param resolution
@@ -23,6 +25,9 @@ upscale_grid <- function(grid,
   # bb
   # (bb[3] - bb[1]) / resolution
   # (bb[4] - bb[2]) / resolution
+
+  listX <- seq(bb[1] + resolution / 2, bb[3] - resolution / 2, resolution)
+  listY <- seq(bb[2] + resolution / 2, bb[4] - resolution / 2, resolution)
 
   grid5km <- raster::raster(vals = 1,
                             xmn = bb[1], ymn = bb[2],
@@ -50,13 +55,20 @@ upscale_grid <- function(grid,
     st_make_valid()
 
   grid5km <- grid5km %>%
+    dplyr::mutate(area_km2 = units::drop_units(st_area(.)) / 10^6)
+
+  grid5km <- grid5km %>%
     dplyr::mutate(X = st_coordinates(st_centroid(.))[,1],
-                  Y = st_coordinates(st_centroid(.))[,2],
-                  area_km2 = units::drop_units(st_area(.)) / 10^6)
+                  Y = st_coordinates(st_centroid(.))[,2]) %>%
+    group_by(X, Y) %>%
+    dplyr::mutate(X = listX[which.min(abs(X - listX))],
+                  Y = listY[which.min(abs(Y - listY))]) %>%
+    ungroup()
 
   cc <- grid5km %>%
-    st_centroid() %>%
-    st_transform(crs = 4326) %>%
+    sf::st_drop_geometry() %>%
+    sf::st_as_sf(coords = c("X", "Y"), crs = sf::st_crs(grid)) %>%
+    sf::st_transform(crs = 4326) %>%
     dplyr::mutate(lon_cent = st_coordinates(.)[,1],
                   lat_cent = st_coordinates(.)[,2])
 

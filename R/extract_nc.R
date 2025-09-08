@@ -1,4 +1,7 @@
-#' Title
+#' Extract covariates from nc file
+#'
+#' On the grid saved in this nc file. SDspace, SDtime and mean can be extracted as well.
+#' If SDtime is extracted: it will extract the SDtime of the center, SDspace and mean that are extracted (e.g. if only center and SDspace are extracted, only SDtime for those will be extracted and not for the mean)
 #'
 #' @param nc.path
 #' @param list_variable

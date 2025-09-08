@@ -2,7 +2,7 @@
 % Please edit documentation in R/create_soap.R
 \name{create_soap}
 \alias{create_soap}
-\title{Title}
+\title{create soap smooth object for DSM}
 \usage{
 create_soap(n, target_study_area, data, keep_point = 1, n_try = 25)
 }
@@ -10,5 +10,5 @@ create_soap(n, target_study_area, data, keep_point = 1, n_try = 25)
 \item{n_try}{}
 }
 \description{
-Title
+create soap smooth object for DSM
 }

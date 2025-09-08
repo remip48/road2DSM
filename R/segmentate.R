@@ -1,4 +1,6 @@
-#' Title
+#' Segmentate GPS data
+#'
+#' from line-transect surveys.
 #'
 #' @param effort
 #' @param LEG
@@ -822,7 +824,7 @@ segmentate <- function(effort,
       labs(title = "Histogram of length from segmented Legs:") +
       theme_bw()
 
-    print((p1 | p2))
+    print((p1 * p2))
   }
 
   for (sp in unique(na.omit(effort_seg_corr$species))) {

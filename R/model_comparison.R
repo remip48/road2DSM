@@ -1,4 +1,6 @@
-#' Title
+#' Models comparison
+#'
+#' Using varying statistics. Predictions are run and bias-corrected as well. Abundances are calculated, and CV estimated. Allowed by sub-areas as well.
 #'
 #' @param run_models
 #' @param seg_data

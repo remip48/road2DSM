@@ -2,7 +2,7 @@
 % Please edit documentation in R/model_comparison.R
 \name{model_comparison}
 \alias{model_comparison}
-\title{Title}
+\title{Models comparison}
 \usage{
 model_comparison(
   run_models,
@@ -41,5 +41,5 @@ model_comparison(
 \item{n_cores}{}
 }
 \description{
-Title
+Using varying statistics. Predictions are run and bias-corrected as well. Abundances are calculated, and CV estimated. Allowed by sub-areas as well.
 }

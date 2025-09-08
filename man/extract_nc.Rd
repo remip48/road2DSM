@@ -2,7 +2,7 @@
 % Please edit documentation in R/extract_nc.R
 \name{extract_nc}
 \alias{extract_nc}
-\title{Title}
+\title{Extract covariates from nc file}
 \usage{
 extract_nc(
   nc.path,
@@ -23,5 +23,6 @@ extract_nc(
 \item{outfile}{}
 }
 \description{
-Title
+On the grid saved in this nc file. SDspace, SDtime and mean can be extracted as well.
+If SDtime is extracted: it will extract the SDtime of the center, SDspace and mean that are extracted (e.g. if only center and SDspace are extracted, only SDtime for those will be extracted and not for the mean)
 }

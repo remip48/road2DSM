@@ -1,4 +1,6 @@
-#' Title
+#' Run DSMextra R-package
+#'
+#' for gap analysis in the environmental space.
 #'
 #' @param seg_data
 #' @param variable

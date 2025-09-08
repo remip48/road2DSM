@@ -2,7 +2,7 @@
 % Please edit documentation in R/create_grid.R
 \name{create_grid}
 \alias{create_grid}
-\title{Title}
+\title{Create sf grid based on effort bbox}
 \usage{
 create_grid(effort, resolution, bbox_grid = NULL, sea = NULL, country = NULL)
 }
@@ -10,5 +10,6 @@ create_grid(effort, resolution, bbox_grid = NULL, sea = NULL, country = NULL)
 \item{country}{}
 }
 \description{
-Title
+Use effort and addition input bbox to create a grid - that can be crop to the study area or the countries, as wished.
+Effort must be an sf object, and grid will be created in the same crs than it. "resolution" must therefore also be in the same unit than this crs.
 }

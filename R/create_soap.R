@@ -1,4 +1,4 @@
-#' Title
+#' create soap smooth object for DSM
 #'
 #' @param n
 #' @param target_study_area

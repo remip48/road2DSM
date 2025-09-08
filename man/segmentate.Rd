@@ -2,7 +2,7 @@
 % Please edit documentation in R/segmentate.R
 \name{segmentate}
 \alias{segmentate}
-\title{Title}
+\title{Segmentate GPS data}
 \usage{
 segmentate(
   effort,
@@ -25,5 +25,5 @@ segmentate(
 \item{plot}{}
 }
 \description{
-Title
+from line-transect surveys.
 }

@@ -1,4 +1,6 @@
-#' Title
+#' Extract covariates on effort
+#'
+#' Based on grids extracted from nc files using extract_nc. You can also use this function to extract covariates from grids created by SDspace_on_sf by reproducing the output structure of extract_nc: the sf grids must be called as "file_set_X.shp" (where X is a number) in file_set_directory. The daily .rds grids with actual covariates to extract must be saved under folder called "file_set_X" where X is matching with the corresponding sf grid.
 #'
 #' @param effort
 #' @param variable
@@ -183,6 +185,8 @@ extract_effort <- function(effort,
         }
       }
 
+      bb <- st_bbox(out)
+
       out_grid <- lapply(out_grid, function(grid) {
         gridcc <- grid %>%
           st_coordinates(.) %>%
@@ -197,8 +201,8 @@ extract_effort <- function(effort,
                                Xmax = gridcc$Xmax,
                                Ymin = gridcc$Ymin,
                                Ymax = gridcc$Ymax) %>%
-                 dplyr::filter(Xmax >= st_bbox(out)[1] & Xmin <= st_bbox(out)[3] &
-                                 Ymax >= st_bbox(out)[2] & Ymin <= st_bbox(out)[4]))
+                 dplyr::filter(Xmax >= bb[1] & Xmin <= bb[3] &
+                                 Ymax >= bb[2] & Ymin <= bb[4]))
       })
 
       all_cols <- do.call("c", lapply(out_grid, function(x) {

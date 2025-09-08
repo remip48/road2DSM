@@ -1,4 +1,7 @@
-#' Title
+#' Create sf grid based on effort bbox
+#'
+#' Use effort and addition input bbox to create a grid - that can be crop to the study area or the countries, as wished.
+#' Effort must be an sf object, and grid will be created in the same crs than it. "resolution" must therefore also be in the same unit than this crs.
 #'
 #' @param effort
 #' @param resolution
@@ -45,6 +48,9 @@ create_grid <- function(effort,
   # (bb[3] - bb[1]) / resolution
   # (bb[4] - bb[2]) / resolution
 
+  listX <- seq(bb[1] + resolution / 2, bb[3] - resolution / 2, resolution)
+  listY <- seq(bb[2] + resolution / 2, bb[4] - resolution / 2, resolution)
+
   grid5km <- raster::raster(vals = 1,
                             xmn = bb[1], ymn = bb[2],
                             xmx = bb[3], ymx = bb[4],
@@ -54,6 +60,21 @@ create_grid <- function(effort,
     st_as_stars() %>%
     st_as_sf() %>%
     st_transform(crs = st_crs(effort))
+
+  grid5km <- grid5km %>%
+    dplyr::mutate(X = st_coordinates(st_centroid(.))[,1],
+                  Y = st_coordinates(st_centroid(.))[,2]) %>%
+    group_by(X, Y) %>%
+    dplyr::mutate(X = listX[which.min(abs(X - listX))],
+                  Y = listY[which.min(abs(Y - listY))]) %>%
+    ungroup()
+
+  cc <- grid5km %>%
+    sf::st_drop_geometry() %>%
+    sf::st_as_sf(coords = c("X", "Y"), crs = sf::st_crs(grid)) %>%
+    sf::st_transform(crs = 4326) %>%
+    dplyr::mutate(lon_cent = st_coordinates(.)[,1],
+                  lat_cent = st_coordinates(.)[,2])
 
   if (all(!is.null(sea))) {
     sea <- sea %>%
@@ -71,6 +92,8 @@ create_grid <- function(effort,
       st_intersection(.,
                       sea) %>%
       st_make_valid()
+
+    cat("Coordinates written in the output files are coordinates of the initial centroid (before intersecting with sea).\n")
   }
 
   if (all(!is.null(country))) {
@@ -89,18 +112,12 @@ create_grid <- function(effort,
       st_difference(.,
                     country) %>%
       st_make_valid()
+
+    cat("Coordinates written in the output files are coordinates of the initial centroid (before intersecting with country).\n")
   }
 
   grid5km <- grid5km %>%
-    dplyr::mutate(X = st_coordinates(st_centroid(.))[,1],
-                  Y = st_coordinates(st_centroid(.))[,2],
-                  area_km2 = units::drop_units(st_area(.)) / 10^6)
-
-  cc <- grid5km %>%
-    st_centroid() %>%
-    st_transform(crs = 4326) %>%
-    dplyr::mutate(lon_cent = st_coordinates(.)[,1],
-                  lat_cent = st_coordinates(.)[,2])
+    dplyr::mutate(area_km2 = units::drop_units(st_area(.)) / 10^6)
 
   grid5km <- grid5km %>%
     dplyr::mutate(id = 1:n(),

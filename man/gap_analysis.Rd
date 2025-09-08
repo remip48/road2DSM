@@ -2,7 +2,7 @@
 % Please edit documentation in R/gap_analysis.R
 \name{gap_analysis}
 \alias{gap_analysis}
-\title{Title}
+\title{Run DSMextra R-package}
 \usage{
 gap_analysis(
   seg_data,
@@ -25,5 +25,5 @@ gap_analysis(
 \item{n_cores}{}
 }
 \description{
-Title
+for gap analysis in the environmental space.
 }

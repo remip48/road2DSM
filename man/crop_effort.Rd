@@ -2,13 +2,18 @@
 % Please edit documentation in R/crop_effort.R
 \name{crop_effort}
 \alias{crop_effort}
-\title{Title}
+\title{Crop effort to the grid extracted from nc files}
 \usage{
-crop_effort(effort, file_set_directory, keep = "all_that_intersect")
+crop_effort(
+  effort,
+  file_set_directory,
+  keep = "all_that_intersect",
+  study_area = NULL
+)
 }
 \arguments{
 \item{keep}{}
 }
 \description{
-Title
+The grid extracted from nc file is supposed to have been extracted with extract_nc
 }

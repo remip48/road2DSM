@@ -1,3 +1,57 @@
+#' Fit models
+#'
+#' with all combinations of covariates desired, and return AIC and LOO metrics if desired.
+#'
+#' @param segdata_obs
+#' @param response
+#' @param predictors
+#' @param spatial_options
+#' @param soap
+#' @param max_cor
+#' @param splines_bs
+#' @param complexity
+#' @param use_loo
+#' @param random
+#' @param offset_effort
+#' @param method
+#' @param nb_min_pred
+#' @param nb_max_pred
+#' @param k
+#' @param intermediate_model_save
+#' @param load_saved_models
+#' @param fit_all_once
+#' @param save_list_models
+#' @param list_models_to_do
+#' @param force_one_off
+#' @param not_together
+#' @param force_include
+#' @param fit_with_actual_data
+#' @param use_select
+#' @param spline_to_add
+#' @param dataset_4correlation
+#' @param data_valid_loo
+#' @param list_knots
+#' @param ncores
+#' @param outfile
+#' @param first_try
+#' @param first_try_AIC
+#' @param by_complexity
+#' @param by_te
+#' @param use_ti
+#' @param all_in_te
+#' @param list_knots2
+#' @param splines_by
+#' @param no_by
+#' @param no_by2
+#' @param month_spline_bs
+#' @param likelihood
+#' @param fit_models
+#' @param verbose
+#'
+#' @return
+#' @export
+#'
+#' @examples
 run_all_DSM <- function (segdata_obs,
                          response = "ppho",
                          predictors,
