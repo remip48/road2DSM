@@ -19,7 +19,7 @@
 #' @export
 #'
 #' @examples
-SDspace_on_sf <- function (file_directory, writing_directory, all_pixel.radius,
+upscale_SDspace <- function (file_directory, writing_directory, all_pixel.radius,
                             n_cores = NULL, outfile = "log.txt")
 {
 

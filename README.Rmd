@@ -2,53 +2,32 @@
 output: github_document
 ---
 
-<!-- README.md is generated from README.Rmd. Please edit that file -->
-
-```{r, include = FALSE}
-knitr::opts_chunk$set(
-  collapse = TRUE,
-  comment = "#>",
-  fig.path = "man/figures/README-",
-  out.width = "100%"
-)
+# LAST UPDATE:
+```{r setup, include=FALSE, echo=FALSE}
+Sys.setlocale("LC_TIME", "English")
+library(lubridate)
 ```
 
-# road2DSM
-
-<!-- badges: start -->
-<!-- badges: end -->
-
-The goal of road2DSM is to ...
-
-## Installation
-
-You can install the development version of road2DSM like so:
-
-``` r
-# FILL THIS IN! HOW CAN PEOPLE INSTALL YOUR DEV PACKAGE?
+```{r date, echo=FALSE, results='asis'}
+cat("##", paste0("**", as.character(format(as.Date(lubridate::today()), "%d %B %Y")),
+           "**"),
+    "", "<br>")
 ```
+**Please update if your installation of road2DSM is prior to this revision.**
 
-## Example
+## Pipeline of the R-package
 
-This is a basic example which shows you how to solve a common problem:
+### Important 
+The functions are adapted to the type of data used and created by the R-package. If you want to use external grids or effort, please adapt the format to the one created by the functions below.
 
-```{r example}
-library(road2DSM)
-## basic example code
-```
-
-What is special about using `README.Rmd` instead of just `README.md`? You can include R chunks like so:
-
-```{r cars}
-summary(cars)
-```
-
-You'll still need to render `README.Rmd` regularly, to keep `README.md` up-to-date. `devtools::build_readme()` is handy for this.
-
-You can also embed plots, for example:
-
-```{r pressure, echo = FALSE}
-plot(pressure)
-```
-
-In that case, don't forget to commit and push the resulting figure files, so they display on GitHub and CRAN.
+### Functions
+* **segmentate**: use GPS effort (**PorpAbundance** format) to cut segments. **label** is the unique identifier of the segment in the output. **effort_km2** and **distance** are the effectively covered area and length of the segment based on the input data. For each unique code in species, 3 columns are created in the ouput: **n_code** (number of individuals based on SIG_nmb column), **n_group_code** (number of sightings) and **n_calves_code** (based on the calves column).
+* **extract_nc**: will extract automatically the center, SDspace, SDtime and mean of your variables in your nc files. You can define for each file if you want all of the 4 variable types or, for example, dont want to extract the mean and SDtime. You can extract variables over different periods and different pixel radius. Results are saved in a folder with the nc grid saved as sf. 
+* **upscale_grid** / **create_grid**: upscale an input grid to the desired resolution, or create a new grid based on the extent you provide. The unique identifier for each cell is **id.** In **create_grid**, you can provide the country or sea (i.e. study area) shapefile to automatically intersect your grid with these ones.
+* **upscale_SDspace**: is used to calculate SDspace over larger spatial grid resolution than the nc file (i.e. study mesoscale events rather than small scale events). The input data are the grids created by **extract_grid** (see below) and is based on **upscale_grid** / **create_grid**.
+# **crop_effort**: will load all sf grids starting with **file_set_** in your directory to combine them in a single sf POLYGON file. Your effort is then cropped to this joined POLYGON file.  
+**extract_effort**: will extract all covariates extracted from **extract_nc** in your effort (must be an sf POLYGON object). You can also extract the covariates from * **upscale_SDspace** by reproducing the folder structure created by **extract_nc**: this means store the grids from **upscale_SDspace** in a folder **file_set_X**, where X is a random and unique number, and add in the parent directory the corresponding sf grid (that was used to run **upscale_SDspace**) under the name **file_set_X.shp**.
+* **extract_grid**: extract all covariates from **extract_nc** on the desired grid (e.g. created by **upscale_grid** / **create_grid**). Can also be used to extract covariates from **upscale_SDspace** but you must also reproduce the folder structure as explained in **extract_effort**.
+* **gap_analysis**: run **dsmextra** R-package to evaluate extrapolations, nearby data and most-influencal covariates on extrapolations in a all-in-one function. Will write a markdown will results.
+* **run_all_DSM** and **backward_selection**: model fitting. The first fit all combinations of possible covariates (flexible function), the second is running the backward selection (not running yet!).
+* **model_comparison**: compare the models fitted above with different statistics. Plot splines, predictions, and estimate abundances. You can define sub-areas to calculate abundances as well. Correct bias from predictions, and write final results. Will write a markdown will results.

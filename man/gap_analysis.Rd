@@ -13,7 +13,7 @@ gap_analysis(
   output_file = paste0(version_preds, "_gap_analysis"),
   grid_folder,
   static_grid,
-  save_results_dsmextra = paste0(getwd(), "/", version_preds, "_gap_analysis_results"),
+  save_results_dsmextra = getwd(),
   study_area = NULL,
   filter_year_month_not_in = "0000-00",
   run_all = F,
