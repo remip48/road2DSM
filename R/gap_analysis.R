@@ -41,6 +41,8 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
   }
 
   if (!is.null(save_results_dsmextra)) {
+    save_results_dsmextra <- gsub("\\\\", "/", save_results_dsmextra)
+
     if (!dir.exists(save_results_dsmextra)) {
       cat(save_results_dsmextra, "directory does not exists.", getwd(), "is used.\n")
       save_results_dsmextra <- getwd()
@@ -547,7 +549,8 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
     "```{r setup, include=FALSE}",
     paste(deparse(setup_chunk), collapse = "\n"),
     "```",
-    "``` {r obsn, echo = F, eval=TRUE, out.width = '200%', results='asis', fig.width = 10, fig.height = 15, dpi = 300, fig.align = 'center'}",
+    # "aaaa"
+    "``` {r obsn, echo = F, eval=TRUE, out.width = '200%', results='asis', fig.width = 10, fig.height = 15, dpi = 100, fig.align = 'center'}",
     paste(deparse(run_dsmextra_chunk), collapse = "\n"),
     "```"
   )
@@ -561,11 +564,11 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
   rmarkdown::render(
     # input = file_name,
     input = tmp_md,
-    output_file = paste0(getwd(), "/", output_file, ".html"),
+    output_file = paste0(save_results_dsmextra, "/", output_file, ".html"),
     quiet = TRUE
   )
 
-  message("HTML report generated: ", paste0(getwd(), "/", output_file, ".html"))
-  browseURL(paste0(getwd(), "/", output_file, ".html"))
-  invisible(paste0(getwd(), "/", output_file, ".html"))
+  message("HTML report generated: ", paste0(save_results_dsmextra, "/", output_file, ".html"))
+  browseURL(paste0(save_results_dsmextra, "/", output_file, ".html"))
+  invisible(paste0(save_results_dsmextra, "/", output_file, ".html"))
 }
