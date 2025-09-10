@@ -361,22 +361,22 @@ model_comparison <- function(run_models, # output from run_all_DSM
       registerDoParallel(cl)
 
       run <- foreach::foreach(f = ls,
-                              .packages = c("sf", "dplyr", "purrr", "stringr"),
+                              .packages = c("sf", "dplyr", "purrr", "stringr", "lubridate"),
                               .noexport = ls()[!(ls() %in% c("static", "ls", "variable", "year", "calibdata", "run_all", "rescale2",
                                                              "models", "to_runm", "version_preds", "response", "log1p_trans", "effort_column", "grid_folder", "folder_predictions"))]
       ) %dopar% {
         cat(match(f, ls), "/", length(ls), "\n")
 
+        date <- str_remove_all(dplyr::last(str_split_1(f, "_")), fixed(".rds"))
+
         current_predgrid <- readRDS(paste0(grid_folder, "/", f)) %>%
           st_drop_geometry() %>%
-          mutate(year = as.numeric(sub(".*_(\\d{4})-\\d{2}-\\d{2}\\.rds$", "\\1", f)))
+          mutate(year = as.numeric(lubridate::year(date)))
 
         gridi <- static %>%
           dplyr::select(id, areakm2, all_of(variable[variable %in% colnames(static)]), X, Y) %>%
           left_join(current_predgrid,
                     by = "id")
-
-        date <- str_sub(str_split_1(f, "_")[3], 1, 10)
 
         grid <- gridi %>%
           st_drop_geometry()
@@ -457,7 +457,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
     ls <- ls[str_detect(ls, "_prediction_") & str_detect(ls, version_preds)]
 
     dates <- unique(do.call("c", map(ls, function(l) {
-      return(str_sub(str_split_1(l, "_")[3], 1, 10))
+      return(str_remove_all(dplyr::last(str_split_1(l, "_")), fixed(".rds")))
     })))
 
     kable(data.frame(date = sort(dates)) %>%

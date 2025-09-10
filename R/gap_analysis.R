@@ -187,7 +187,7 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
                           values_extra <- predgrid %>%
                             dplyr::select(id, y, x) %>%
                             left_join(extrapolation$data$all, by = c("x", "y")) %>%
-                            dplyr::mutate(date = str_remove_all(str_split_1(l, "_")[3], fixed(".rds")),
+                            dplyr::mutate(date = str_remove_all(dplyr::last(str_split_1(l, "_")), fixed(".rds")),
                                           year = as.numeric(lubridate::year(unique(date)))) %>%
                             st_drop_geometry()
 
@@ -203,7 +203,7 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
                                          dplyr::mutate(x = listX[which.min(abs(unique(x) - listX))],
                                                        y = listY[which.min(abs(unique(y) - listY))]) %>%
                                          ungroup(), by = c("x", "y")) %>%
-                            dplyr::mutate(date = str_remove_all(str_split_1(l, "_")[3], fixed(".rds")),
+                            dplyr::mutate(date = str_remove_all(dplyr::last(str_split_1(l, "_")), fixed(".rds")),
                                           year = as.numeric(lubridate::year(unique(date)))) %>%
                             st_drop_geometry()
 
@@ -229,13 +229,81 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
     values_nearby_ref <- static_sf %>%
       left_join(values_nearby, by = "id")
 
+    ## entire period
+    print(ggplot() +
+            geom_sf(data = study_area, fill = "white", alpha = 0.1) +
+            geom_sf(data = static_sf %>%
+                      left_join(values_extra_ref %>%
+                                  st_drop_geometry() %>%
+                                  group_by(id) %>%
+                                  dplyr::summarise(mean_ext = 100*length(which(ExDet < 0 | ExDet > 1)) / n()) %>%
+                                  ungroup() %>%
+                                  dplyr::filter(mean_ext > 0), by = "id"),
+                    aes(fill = mean_ext), color = NA) +
+            scale_fill_continuous_sequential(palette = "Reds 3", begin = .15, name = "Percentage of days\nwhere the cell is extrapolated.\n0 are excluded:") +
+            theme_bw() +
+            theme(panel.background = element_rect(fill = "white"),
+                  legend.position = "top",
+                  legend.direction = "horizontal") +
+            labs(title = paste("Overall percentages of extrapolation")) +
+            coord_sf(xlim = c(min(static$X), max(static$X)),
+                     ylim = c(min(static$Y), max(static$Y)),
+                     expand = F))
+
+    print(ggplot() +
+            geom_sf(data = study_area, fill = "white", alpha = 0.1) +
+            geom_sf(data = static_sf %>%
+                      left_join(values_extra_ref %>%
+                                  st_drop_geometry() %>%
+                                  dplyr::filter(mic != 0) %>%
+                                  group_by(id) %>%
+                                  dplyr::summarise(n_mic = length(unique(mic))) %>%
+                                  ungroup(),
+                                by = "id"),
+                    aes(fill = n_mic), color = NA) +
+            scale_fill_viridis_d(name = NULL) +
+            theme_bw() +
+            theme(panel.background = element_rect(fill = "white"),
+                  legend.position = "top",
+                  legend.direction = "horizontal") +
+            labs(title = paste("Number of unique daily 'Most influential variable on extrapolations' over the entire period per cell:")) +
+            coord_sf(xlim = c(min(static$X), max(static$X)),
+                     ylim = c(min(static$Y), max(static$Y)),
+                     expand = F))
+
+    print(ggplot() +
+            geom_sf(data = study_area, fill = "white", alpha = 0.1) +
+            geom_sf(data = static_sf %>%
+                      left_join(values_nearby_ref %>%
+                                  st_drop_geometry() %>%
+                                  group_by(id) %>%
+                                  dplyr::reframe(value = c(mean(perc_nearby, na.rm = T),
+                                                           median(perc_nearby, na.rm = T),
+                                                           min(perc_nearby, na.rm = T),
+                                                           max(perc_nearby, na.rm = T)),
+                                                 type = c("Mean", "Median", "Min", "Max")) %>%
+                                  dplyr::mutate(type = factor(type, levels = c("Mean", "Median", "Min", "Max"))),
+                                by = "id"),
+                    aes(fill = value), color = NA) +
+            scale_fill_viridis_c(name = "% nearby"
+                                 ) +
+            theme_bw() +
+            theme(panel.background = element_rect(fill = "white"),
+                  legend.position = "top",
+                  legend.direction = "horizontal") +
+            labs(title = paste("Summary of the Nearby data per cell over the entire period")) +
+            coord_sf(xlim = c(min(static$X), max(static$X)),
+                     ylim = c(min(static$Y), max(static$Y)),
+                     expand = F))
+    ## per year/date
+
+    ExDet <- values_extra_ref %>%
+      pull(ExDet)
+
     for (yr in sort(unique(values_extra_ref$year))) {
 
       values_extra <- values_extra_ref %>%
         dplyr::filter(year == yr)
-
-      ExDet <- values_extra_ref %>%
-        pull(ExDet)
 
       print(ggplot() +
               geom_sf(data = study_area, fill = "white", alpha = 0.1) +
@@ -306,7 +374,7 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
                         dplyr::mutate(mic = factor(mic, levels = variable)),
                       aes(fill = mic, color = mic)) +
               scale_fill_viridis_d() +
-              scale_color_viridis_d() +
+              scale_color_viridis_d(direction = -1) +
               facet_wrap(~ date, ncol = 10) +
               theme_bw() +
               theme(panel.background = element_rect(fill = "white"),
@@ -451,7 +519,7 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
     "```{r run, echo=FALSE}",
     paste(deparse(run_preds_chunk), collapse = "\n"),
     "```",
-    "``` {r obsn, echo = F, eval=TRUE, out.width = '150%', results='asis', fig.width = 10, fig.height = 15, dpi = 300, fig.align = 'center'}",
+    "``` {r obsn, echo = F, eval=TRUE, out.width = '200%', results='asis', fig.width = 10, fig.height = 15, dpi = 300, fig.align = 'center'}",
     paste(deparse(run_dsmextra_chunk), collapse = "\n"),
     "```"
   )

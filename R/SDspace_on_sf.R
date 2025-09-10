@@ -20,7 +20,7 @@
 #'
 #' @examples
 SDspace_on_sf <- function (file_directory, writing_directory, all_pixel.radius,
-                           n_cores = NULL, outfile = "log.txt")
+                            n_cores = NULL, outfile = "log.txt")
 {
 
   list_files <- list.files(file_directory)
@@ -29,6 +29,7 @@ SDspace_on_sf <- function (file_directory, writing_directory, all_pixel.radius,
     n_cores <- detectCores() * 2/4
   }
   cat("Parallel processing with", n_cores, "cores will be used. Check that computed can handle it.\n")
+
   cl <- makeCluster(n_cores, outfile = outfile)
   registerDoParallel(cl)
 
@@ -115,7 +116,7 @@ SDspace_on_sf <- function (file_directory, writing_directory, all_pixel.radius,
           }
 
           saveRDS(out,
-                  file_to_save)
+                  file.path(writing_directory, file_to_save))
 
         }
         return(NULL)
@@ -125,6 +126,7 @@ SDspace_on_sf <- function (file_directory, writing_directory, all_pixel.radius,
   try(stopCluster(cl))
   gc()
 
-  return(NULL)
+  # return(NULL)
   invisible("Finished")
 }
+
