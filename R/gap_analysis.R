@@ -121,10 +121,12 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
   study_area <- static %>%
     group_by() %>%
     dplyr::summarise(do_union = T) %>%
-    st_cast("MULTIPOLYGON")
+    st_cast("MULTIPOLYGON") %>%
+    st_simplify()
 
   static_sf <- static %>%
-    dplyr::select(id)
+    dplyr::select(id) %>%
+    st_simplify()
 
   static <- static %>%
     st_drop_geometry()
@@ -260,17 +262,33 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
       left_join(values_nearby, by = "id")
 
     ## entire period
+    vsfext <- static_sf %>%
+      left_join(values_extra_ref %>%
+                  st_drop_geometry() %>%
+                  group_by(id) %>%
+                  dplyr::summarise(mean_ext = 100*length(which(ExDet < 0 | ExDet > 1)) / n()) %>%
+                  ungroup() %>%
+                  dplyr::filter(mean_ext > 0), by = "id") %>%
+      dplyr::filter(!is.na(mean_ext))
+
+    up_bound <- (ceiling(max(vsfext$mean_ext, na.rm = T) / 10) * 10)
+    labs <- do.call("c", lapply(seq(10, up_bound, 10), function(u) {
+      if (u == 10) {
+        "> 0 - 10"
+      } else {
+        paste0(u-9, " - ", u, " %")
+      }
+    }))
+
     print(ggplot() +
             geom_sf(data = study_area, fill = "white", alpha = 0.1) +
-            geom_sf(data = static_sf %>%
-                      left_join(values_extra_ref %>%
-                                  st_drop_geometry() %>%
-                                  group_by(id) %>%
-                                  dplyr::summarise(mean_ext = 100*length(which(ExDet < 0 | ExDet > 1)) / n()) %>%
-                                  ungroup() %>%
-                                  dplyr::filter(mean_ext > 0), by = "id"),
-                    aes(fill = mean_ext), color = NA) +
-            scale_fill_continuous_sequential(palette = "Reds 3", begin = .15, name = "Percentage of days\nwhere the cell is extrapolated.\n0 are excluded:") +
+            geom_sf(data = vsfext,
+                    aes(fill = cut(mean_ext,
+                                   c(-1, seq(10, up_bound, 10)),
+                                   labels = labs)), color = NA) +
+            scale_fill_discrete_sequential(palette = "Reds 3", #begin = .15,
+                                           name = "Percentage of days\nwhere the cell is extrapolated.\n0 are excluded:",
+                                           drop = F) +
             theme_bw() +
             theme(panel.background = element_rect(fill = "white"),
                   legend.position = "top",
@@ -317,6 +335,7 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
                     aes(fill = value), color = NA) +
             scale_fill_viridis_c(name = "% nearby"
             ) +
+            facet_wrap(~ type) +
             theme_bw() +
             theme(panel.background = element_rect(fill = "white"),
                   legend.position = "top",
@@ -402,9 +421,9 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
               geom_sf(data = study_area, fill = "white", alpha = 0.1) +
               geom_sf(data = values_mic %>%
                         dplyr::mutate(mic = factor(mic, levels = variable)),
-                      aes(fill = mic, color = mic)) +
+                      aes(fill = mic), color = NA) +
               scale_fill_viridis_d() +
-              scale_color_viridis_d(direction = -1) +
+              # scale_color_viridis_d(direction = -1) +
               facet_wrap(~ date, ncol = 10) +
               theme_bw() +
               theme(panel.background = element_rect(fill = "white"),
@@ -550,7 +569,7 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
     paste(deparse(setup_chunk), collapse = "\n"),
     "```",
     # "aaaa"
-    "``` {r obsn, echo = F, eval=TRUE, out.width = '200%', results='asis', fig.width = 10, fig.height = 15, dpi = 100, fig.align = 'center'}",
+    "``` {r obsn, echo = F, eval=TRUE, out.width = '300%', results='asis', fig.width = 10, fig.height = 15, fig.align = 'center'}", # , dpi = 100
     paste(deparse(run_dsmextra_chunk), collapse = "\n"),
     "```"
   )

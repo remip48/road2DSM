@@ -83,7 +83,7 @@ segmentate <- function(effort,
   # if sf_linestring = T, return also distance (distance in km of the segment)
 
   .segmentate<-function(DATA,LEG="Leg",LENGTH=5,TOLERANCE=0,MIN_SEG_LENGTH=2.5,CRS=4326,bad_conditions=c("ll", "lx", "xl", "xx", "pp", "lp", "pl", "xp", "px",""),
-                       conditions="subj",MINROW=1,MAXDIST=2.5,COORD_COL=c('lon','lat'),SEED=1234,sf_linestring=F){
+                        conditions="subj",MINROW=1,MAXDIST=2.5,COORD_COL=c('lon','lat'),SEED=1234,sf_linestring=F){
 
     # load_packages <- function(p) {
     #   if (p %in% rownames(installed.packages())) {
@@ -96,7 +96,7 @@ segmentate <- function(effort,
     # lapply(c("sf", "dplyr", "lwgeom", "purrr"), load_packages)
     # if (parallelize) {load_packages("doParallel")}
 
-    cat("Data must be ordered by time firstly\n")
+    cat("Data is ordered by Leg/time\n")
 
     ## Leg = initial Legs to be segmented
     ## SubLeg = section of Legs separated by bad conditions or distance = 0 in data, defined by "Subpart" variable. Allow to separate parts of Legs separated by a long distance
@@ -706,6 +706,7 @@ segmentate <- function(effort,
     return(sd)
   }
 
+  cat("Leg is created based on unique Transect (EFF_Track) & date\n\n")
   effort <- effort %>%
     dplyr::mutate(
       Leg = paste(EFF_Track, date, sep = "_")
@@ -746,10 +747,10 @@ segmentate <- function(effort,
   effort <- effort_sf_line %>%
     group_by(label) %>%
     dplyr::summarise(#Leg = unique(Leg),
-                     # LegPart = paste(unique(LegPart), collapse = ", "), ## LegPart, SugLeg and Seg are columns used internally for segmenting.
-                     # SubLeg = unique(SubLeg),
-                     # Seg = unique(Seg),
-                     do_union = F) %>%
+      # LegPart = paste(unique(LegPart), collapse = ", "), ## LegPart, SugLeg and Seg are columns used internally for segmenting.
+      # SubLeg = unique(SubLeg),
+      # Seg = unique(Seg),
+      do_union = F) %>%
     st_cast("MULTILINESTRING")
 
   # effort <- effort %>%
@@ -783,9 +784,9 @@ segmentate <- function(effort,
                   podsize = ifelse(!(sub_sig %in% all_bad_conditions),
                                    podsize,
                                    0),
-                  SIG_nmb = ifelse(!(sub_sig %in% all_bad_conditions),
-                                   SIG_nmb,
-                                   0))
+                  SIG_number = ifelse(!(sub_sig %in% all_bad_conditions),
+                                      SIG_number,
+                                      0))
 
   info <- effort_seg_corr %>%
     group_by(label) %>%
@@ -814,36 +815,38 @@ segmentate <- function(effort,
       scale_color_manual(values = rep(viridis::viridis(3), ceiling(length(effort_sf_line$label) / 3))) +
       # geom_point(data = effort_seg_ref$data_segmented, aes(x = lon, y = lat), color = "red", size = 2) +
       # geom_point(data = effort, aes(x = lon, y = lat), color = "purple") +
-      geom_sf(data = effort_sf_line, aes(color = label), show.legend = F, linewidth = 3) +
-      labs(title = paste0(LENGTH, " km segments:")) +
+      geom_sf(data = effort_sf_line, aes(color = label), show.legend = F, linewidth = 1.5) +
+      labs(title = paste0(LENGTH, " km-target segments:")) +
       theme_bw() +
       theme(panel.background = element_rect(fill = "aliceblue"))
 
     p2 <- ggplot() +
-      geom_histogram(data = effort, aes(x = distance)) +
+      geom_histogram(data = effort, aes(x = distance), fill = "midnightblue") +
       labs(title = "Histogram of length from segmented Legs:") +
+      scale_x_continuous(name = "Length (km)")
       theme_bw()
 
     print((p1 * p2))
   }
 
   for (sp in unique(na.omit(effort_seg_corr$species))) {
-    if (!(str_remove_all(sp, fixed(" ")) %in% ""))
-    obs <- effort_seg_corr %>%
-      filter(species == sp)
+    if (!(str_remove_all(sp, fixed(" ")) %in% "")) {
+      obs <- effort_seg_corr %>%
+        filter(species == sp)
 
-    obs <- obs %>%
-      group_by(label) %>%
-      dplyr::summarise(!!paste0("n_", sp) := sum(SIG_nmb, na.rm = T),
-                       !!paste0("n_group_", sp) := length(which(SIG_nmb > 0)),
-                       !!paste0("n_calves_", sp) := sum(calves, na.rm = T))
+      obs <- obs %>%
+        group_by(label) %>%
+        dplyr::summarise(!!paste0("n_", sp) := sum(SIG_number, na.rm = T),
+                         !!paste0("n_group_", sp) := length(which(SIG_number > 0)),
+                         !!paste0("n_calves_", sp) := sum(calves, na.rm = T))
 
-    effort <- effort %>%
-      left_join(obs, by = "label") %>%
-      as.data.frame() %>%
-      dplyr::mutate(!!paste0("n_", sp) := ifelse(is.na(get(paste0("n_", sp))), 0, get(paste0("n_", sp))),
-                    !!paste0("n_group_", sp) := ifelse(is.na(get(paste0("n_group_", sp))), 0, get(paste0("n_group_", sp))),
-                    !!paste0("n_calves_", sp) := ifelse(is.na(get(paste0("n_calves_", sp))), 0, get(paste0("n_calves_", sp))))
+      effort <- effort %>%
+        left_join(obs, by = "label") %>%
+        as.data.frame() %>%
+        dplyr::mutate(!!paste0("n_", sp) := ifelse(is.na(get(paste0("n_", sp))), 0, get(paste0("n_", sp))),
+                      !!paste0("n_group_", sp) := ifelse(is.na(get(paste0("n_group_", sp))), 0, get(paste0("n_group_", sp))),
+                      !!paste0("n_calves_", sp) := ifelse(is.na(get(paste0("n_calves_", sp))), 0, get(paste0("n_calves_", sp))))
+    }
   }
 
   effort <- effort %>%

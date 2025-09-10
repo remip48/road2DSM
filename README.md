@@ -21,7 +21,7 @@ format to the one created by the functions below.
     output. **effort_km2** and **distance** are the effectively covered
     area and length of the segment based on the input data. For each
     unique code in species, 3 columns are created in the ouput:
-    **n_code** (number of individuals based on SIG_nmb column),
+    **n_code** (number of individuals based on SIG_number column),
     **n_group_code** (number of sightings) and **n_calves_code** (based
     on the calves column).
 
@@ -68,7 +68,7 @@ format to the one created by the functions below.
 
 -   **gap_analysis**: run **dsmextra** R-package to evaluate
     extrapolations, nearby data and most-influencal covariates on
-    extrapolations in a all-in-one function. Will write a markdown will
+    extrapolations in a all-in-one function. Will write a markdown with
     results.
 
 -   **run_all_DSM** and **backward_selection**: model fitting. The first
@@ -79,4 +79,4 @@ format to the one created by the functions below.
     statistics. Plot splines, predictions, and estimate abundances. You
     can define sub-areas to calculate abundances as well. Correct bias
     from predictions, and write final results. Will write a markdown
-    will results.
+    with results.
