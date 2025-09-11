@@ -3,7 +3,6 @@
 #' from line-transect surveys.
 #'
 #' @param effort
-#' @param LEG
 #' @param LENGTH
 #' @param TOLERANCE
 #' @param MIN_SEG_LENGTH
@@ -22,7 +21,6 @@
 #'
 #' @examples
 segmentate <- function(effort,
-                       LEG="Leg",
                        LENGTH=10,
                        TOLERANCE=0,
                        MIN_SEG_LENGTH=2.5,
@@ -842,7 +840,6 @@ segmentate <- function(effort,
 
       effort <- effort %>%
         left_join(obs, by = "label") %>%
-        as.data.frame() %>%
         dplyr::mutate(!!paste0("n_", sp) := ifelse(is.na(get(paste0("n_", sp))), 0, get(paste0("n_", sp))),
                       !!paste0("n_group_", sp) := ifelse(is.na(get(paste0("n_group_", sp))), 0, get(paste0("n_group_", sp))),
                       !!paste0("n_calves_", sp) := ifelse(is.na(get(paste0("n_calves_", sp))), 0, get(paste0("n_calves_", sp))))

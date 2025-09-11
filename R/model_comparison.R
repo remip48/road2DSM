@@ -60,10 +60,10 @@ model_comparison <- function(run_models, # output from run_all_DSM
                                       breaks_plot = c(-1, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 1.25, 1.5, 1000),
                                       labels_plot = c("0.00 - 0.10", "0.11 - 0.20", "0.21 - 0.30", "0.31 - 0.40", "0.41 - 0.50",
                                                        "0.51 - 0.75", "0.76 - 1.00", "1.01 - 1.25", "1.26 - 1.5", "> 1.50"),
-                                      corr_groupsize, # correction factor for groupsize, if groupsize is used, to multiply the predicted densities.
+                                      corr_groupsize = NA, # correction factor for groupsize, if groupsize is used, to multiply the predicted densities.
                                       response, # should contain "group" if it is modelling the number of groups rather than of individuals. But please
                                       # use n_SpeciesCode for the number of individuals, or n_group_SpeciesCode for the number of groups!
-                                      subspecies, # in case response contains several species. The groupsize estimate will then account for all the subspecies
+                                      subspecies = NA, # in case response contains several species. The groupsize estimate will then account for all the subspecies
                                       filter_year_month_not_in = "0000-00", # year and month that should not be used for prediction
                                       run_all = F,
                                       outfile = "log.txt",

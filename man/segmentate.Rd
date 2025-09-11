@@ -6,7 +6,6 @@
 \usage{
 segmentate(
   effort,
-  LEG = "Leg",
   LENGTH = 10,
   TOLERANCE = 0,
   MIN_SEG_LENGTH = 2.5,

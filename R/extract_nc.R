@@ -264,7 +264,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
     cl <- makeCluster(n_cores, outfile = outfile)
     registerDoParallel(cl)
     try({
-      all_run <- foreach(dt = 1:nrow(dates), .packages = c("purrr",
+      all_run <- foreach(dt = 1:nrow(dates), .packages = c("purrr", "rlang",
                                                            "dplyr", "timeDate", "ncdf4", "stringr", "data.table",
                                                            "collapse"), .noexport = ls()[!(ls() %in% c("data",
                                                                                                        "ncinfoi", "nc.path", "expr", "order_dim", "create_dim",
@@ -612,6 +612,6 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
     try(stopCluster(cl))
     gc()
   }
-  return(NULL)
+  # return(NULL)
   invisible("Finished")
 }

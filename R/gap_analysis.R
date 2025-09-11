@@ -175,7 +175,13 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
 
   ##############
   run_dsmextra_chunk <- quote({
-    cat("\n\nvariable used for gap analysis: all", paste0("(", paste(variable, collapse = ", "), ")"), "<br><br>\n\n")
+    cat("\n\n<br><br>")
+    cat("#### variable used for gap analysis: all", paste0("(", paste(variable, collapse = ", "), ")"))
+    cat("<br><br>\n\n")
+
+    cat("Years present in calibration data:", paste0(sort(unique(seg_data$year)),
+                                                     collapse = ", "))
+    cat("<br><br>\n\n")
 
     if (!file.exists(paste0(save_results_dsmextra, "/", version_preds, "_dsmextra.RData")) | run_all) {
       # list_extrapolation <- list()
@@ -286,14 +292,14 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
                     aes(fill = cut(mean_ext,
                                    c(-1, seq(10, up_bound, 10)),
                                    labels = labs)), color = NA) +
-            scale_fill_discrete_sequential(palette = "Reds 3", #begin = .15,
-                                           name = "Percentage of days\nwhere the cell is extrapolated.\n0 are excluded:",
-                                           drop = F) +
+            # scale_fill_discrete_sequential(palette = "Reds 3", #begin = .10,
+            #                                name = "Percentage of days\nwhere the cell is extrapolated:") +
+            scale_fill_viridis_d(name = "Percentage of days\nwhere the cell is extrapolated:") +
             theme_bw() +
             theme(panel.background = element_rect(fill = "white"),
                   legend.position = "top",
                   legend.direction = "horizontal") +
-            labs(title = paste("Overall percentages of extrapolation")) +
+            labs(title = paste("Overall percentages of extrapolation\n0 are excluded and not displayed (white)")) +
             coord_sf(xlim = c(min(static$X), max(static$X)),
                      ylim = c(min(static$Y), max(static$Y)),
                      expand = F))
@@ -307,7 +313,8 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
                                   group_by(id) %>%
                                   dplyr::summarise(n_mic = length(unique(mic))) %>%
                                   ungroup(),
-                                by = "id"),
+                                by = "id") %>%
+                      dplyr::filter(!is.na(n_mic)),
                     aes(fill = n_mic), color = NA) +
             scale_fill_viridis_c(name = NULL) +
             theme_bw() +
@@ -422,7 +429,7 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
               geom_sf(data = values_mic %>%
                         dplyr::mutate(mic = factor(mic, levels = variable)),
                       aes(fill = mic), color = NA) +
-              scale_fill_viridis_d() +
+              scale_fill_viridis_d(name = NULL) +
               # scale_color_viridis_d(direction = -1) +
               facet_wrap(~ date, ncol = 10) +
               theme_bw() +
@@ -569,7 +576,7 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
     paste(deparse(setup_chunk), collapse = "\n"),
     "```",
     # "aaaa"
-    "``` {r obsn, echo = F, eval=TRUE, out.width = '300%', results='asis', fig.width = 10, fig.height = 15, fig.align = 'center'}", # , dpi = 100
+    "``` {r obsn, echo = F, eval=TRUE, out.width = '300%', results='asis', fig.width = 15, fig.height = 15, fig.align = 'center'}", # , dpi = 100
     paste(deparse(run_dsmextra_chunk), collapse = "\n"),
     "```"
   )

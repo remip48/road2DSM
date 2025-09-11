@@ -100,6 +100,7 @@ run_all_DSM <- function (segdata_obs,
 {
   tab = T
   weighted = FALSE
+  parallel = T
 
   rescale2 <- function (ynew, y = NULL)
   {

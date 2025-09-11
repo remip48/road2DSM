@@ -1,12 +1,14 @@
 
 # LAST UPDATE:
 
-## **10 September 2025** <br>
+## **11 September 2025** <br>
 
 **Please update if your installation of road2DSM is prior to this
 revision.**
 
-## Pipeline of the R-package
+The full pipeline can be followed in the script **run_road2DSM.R** from
+the main folder, where the package is explained step by step. Below is
+the more detailed explanation of the functions.
 
 ### Important
 
