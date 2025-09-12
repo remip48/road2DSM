@@ -139,8 +139,8 @@ extract_effort <- function(effort,
         while (i <= (length(out_grid) - 1)) {
           j <- i + 1
           while (j <= length(out_grid)) {
-            if (all(unique(paste(floor(out_grid[[i]]$lat_cent*10^5)/10^5,
-                                 floor(out_grid[[i]]$lon_cent*10^5)/10^5)) %in% unique(paste(floor(out_grid[[i]]$lat_cent*10^5)/10^5,
+            if (all(unique(paste(floor(out_grid[[j]]$lat_cent*10^5)/10^5,
+                                 floor(out_grid[[j]]$lon_cent*10^5)/10^5)) %in% unique(paste(floor(out_grid[[i]]$lat_cent*10^5)/10^5,
                                                                                              floor(out_grid[[i]]$lon_cent*10^5)/10^5)))) {
               # if (all(out_grid[[i]]$lon_cent == out_grid[[j]]$lon_cent) &
               #     all(out_grid[[i]]$lat_cent == out_grid[[j]]$lat_cent)) {

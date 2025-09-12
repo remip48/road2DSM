@@ -15,12 +15,13 @@ extract_nc(
   latmin = -Inf,
   lonmax = Inf,
   latmax = Inf,
+  Number_starting_name_file_set = 1,
   n_cores = NULL,
   outfile = "log.txt"
 )
 }
 \arguments{
-\item{outfile}{}
+\item{Number_starting_name_file_set}{}
 }
 \description{
 On the grid saved in this nc file. SDspace, SDtime and mean can be extracted as well.
