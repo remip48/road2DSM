@@ -101,8 +101,8 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
     dplyr::summarise(allfile = paste(file, collapse = "///")) %>%
     ungroup() %>% dplyr::mutate(file_set = paste0("file_set_",
                                                   match(allfile, unique(allfile)) + Number_starting_name_file_set - 1)) %>% left_join(nc_filesi %>%
-                                                                                                    dplyr::select(file, variable) %>% distinct(), by = "variable",
-                                                                                                  relationship = "one-to-many") %>% dplyr::rename(file_id = file) %>%
+                                                                                                                                        dplyr::select(file, variable) %>% distinct(), by = "variable",
+                                                                                                                                      relationship = "one-to-many") %>% dplyr::rename(file_id = file) %>%
     dplyr::select(-allfile)
   if (!("expr" %in% colnames(nc_files))) {
     nc_files$expr <- NA
@@ -260,6 +260,12 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
     if (is.null(n_cores)) {
       n_cores <- detectCores() * 2/4
     }
+
+    llon <- unique(data$lon_cent)
+    llat <- unique(data$lat_cent)
+    dlon <- mean(sort(llon)[-1] - sort(llon)[-length(llon)])
+    dlat <- mean(sort(llat)[-1] - sort(llat)[-length(llat)])
+
     cat("Parallel processing with", n_cores, "cores will be used. Check that computed can handle it.\n\n",
         "In case of large files, few iterations might return an error due to memory limits. The function can then be re-run to re-do only these few iterations\n")
 
@@ -268,7 +274,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
     try({
       all_run <- foreach(dt = 1:nrow(dates), .packages = c("purrr", "rlang",
                                                            "dplyr", "timeDate", "ncdf4", "stringr", "data.table",
-                                                           "collapse"), .noexport = ls()[!(ls() %in% c("data",
+                                                           "collapse"), .noexport = ls()[!(ls() %in% c("data", "llon", "llat", "dlon", "dlat",
                                                                                                        "ncinfoi", "nc.path", "expr", "order_dim", "create_dim",
                                                                                                        "origin_all", "all_days_period_ref", "infos_dim",
                                                                                                        "f", "all_pixel.radius", "pixel.radius", "pred.type",
@@ -331,6 +337,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                            1, 1)
             numtimes <- min(max(all_time.period), day.index)
             Predictor.name <- Predictor.name_ref
+
             data.var_refi <- lapply(Predictor.name, function(pred) {
               data.var_ref <- try(ncvar_get(nc.data, pred,
                                             start = order_dim(infos_dim %>% dplyr::filter(variable ==
@@ -410,7 +417,9 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                  lat = lat, depth = depth, time = 1:max(all_time.period)) %>%
                         as.data.frame()) %>% dplyr::rename(`:=`(!!paste0(pred),
                                                                 data.var_ref))
-              return(out)
+              return(out %>%
+                       dplyr::filter(lon >= (min(llon) - dlon / 2) & lon <= (max(llon) + dlon / 2) &
+                                       lat >= (min(llat) - dlat / 2) & lat <= (max(llat) + dlat / 2)))
             })
             nc_close(nc.data)
             data.var_ref <- data.var_refi[[1]]
@@ -439,7 +448,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
             if (length(id_NA) > 0) {
               data.var_ref <- data.var_ref[-id_NA, ]
             }
-            if (all(!is.na(expr)) & all(!is.null(expr))) {
+            if (all(!is.na(expr))) {
               for (e in expr) {
                 Predictor.name <- c(Predictor.name, str_remove_all(str_split_1(e,
                                                                                fixed("="))[1], " "))
@@ -452,8 +461,6 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
             #   dplyr::select(lon_cent, lat_cent) %>%
             #   unique()
 
-            llon <- unique(data$lon_cent)
-            llat <- unique(data$lat_cent)
             # data.var_ref <- data.var_ref %>%
             #   group_by(lon, lat) %>%
             #   dplyr::mutate(nearest_point = which.min(abs(unique(lon) - lonlat$lon_cent) + abs(unique(lat) - lonlat$lat_cent)),
@@ -469,6 +476,11 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
               group_by(lat) %>%
               dplyr::mutate(lat   = llat[which.min(abs(unique(lat) - llat))]) %>%
               ungroup()
+
+            # ggplot() +
+            #   geom_point(data = data.var_ref %>%
+            #                dplyr::filter(t == 1), aes(x = lon, y = lat), size = .1) +
+            #   geom_point(data = data, aes(x = lon_cent, y = lat_cent), color = "red", size = .1)
 
             if (any(!(unique(paste(floor(data$lat_cent*10^5)/10^5,
                                    floor(data$lon_cent*10^5)/10^5)) %in% unique(paste(floor(data.var_ref$lat*10^5)/10^5,
@@ -542,12 +554,12 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                 }
                 outM <- outM %>% as_tibble()
                 # if (run_mean_SDspace) {
-                  colnames(outM)[str_detect(colnames(outM),
-                                            fixed(".mean")) | str_detect(colnames(outM),
-                                                                         fixed(".SDspace"))] <- paste0(colnames(outM)[str_detect(colnames(outM),
-                                                                                                                                 fixed(".mean")) | str_detect(colnames(outM),
-                                                                                                                                                              fixed(".SDspace"))], "_", pixel.radius,
-                                                                                                       "p")
+                colnames(outM)[str_detect(colnames(outM),
+                                          fixed(".mean")) | str_detect(colnames(outM),
+                                                                       fixed(".SDspace"))] <- paste0(colnames(outM)[str_detect(colnames(outM),
+                                                                                                                               fixed(".mean")) | str_detect(colnames(outM),
+                                                                                                                                                            fixed(".SDspace"))], "_", pixel.radius,
+                                                                                                     "p")
                 # }
                 outM <- outM %>% left_join(data.var_ref %>%
                                              dplyr::select(id_nc, t, all_of(Predictor.name)),
