@@ -263,8 +263,8 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
 
     llon <- unique(data$lon_cent)
     llat <- unique(data$lat_cent)
-    dlon <- mean(sort(llon)[-1] - sort(llon)[-length(llon)])
-    dlat <- mean(sort(llat)[-1] - sort(llat)[-length(llat)])
+    dlon <- median(sort(llon)[-1] - sort(llon)[-length(llon)])
+    dlat <- median(sort(llat)[-1] - sort(llat)[-length(llat)])
 
     cat("Parallel processing with", n_cores, "cores will be used. Check that computed can handle it.\n\n",
         "In case of large files, few iterations might return an error due to memory limits. The function can then be re-run to re-do only these few iterations\n")

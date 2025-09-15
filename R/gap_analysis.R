@@ -289,68 +289,68 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
     print(ggplot2::ggplot() +
             ggplot2::geom_sf(data = study_area, fill = "white", alpha = 0.1) +
             ggplot2::geom_sf(data = vsfext,
-                    aes(fill = cut(mean_ext,
-                                   c(-1, seq(10, up_bound, 10)),
-                                   labels = labs)), color = NA) +
+                             ggplot2::aes(fill = cut(mean_ext,
+                                                     c(-1, seq(10, up_bound, 10)),
+                                                     labels = labs)), color = NA) +
             # scale_fill_discrete_sequential(palette = "Reds 3", #begin = .10,
             #                                name = "Percentage of days\nwhere the cell is extrapolated:") +
             ggplot2::scale_fill_viridis_d(name = "Percentage of days\nwhere the cell is extrapolated:") +
             ggplot2::theme_bw() +
-            ggplot2::theme(panel.background = element_rect(fill = "white"),
-                  legend.position = "top",
-                  legend.direction = "horizontal") +
-            labs(title = paste("Overall percentages of extrapolation\n0 are excluded and not displayed (white)")) +
-            coord_sf(xlim = c(min(static$X), max(static$X)),
-                     ylim = c(min(static$Y), max(static$Y)),
-                     expand = F))
+            ggplot2::theme(panel.background = ggplot2::element_rect(fill = "white"),
+                           legend.position = "top",
+                           legend.direction = "horizontal") +
+            ggplot2::labs(title = paste("Overall percentages of extrapolation\n0 are excluded and not displayed (white)")) +
+            ggplot2::coord_sf(xlim = c(min(static$X), max(static$X)),
+                              ylim = c(min(static$Y), max(static$Y)),
+                              expand = F))
 
     print(ggplot2::ggplot() +
             ggplot2::geom_sf(data = study_area, fill = "white", alpha = 0.1) +
             ggplot2::geom_sf(data = static_sf %>%
-                      left_join(values_extra_ref %>%
-                                  st_drop_geometry() %>%
-                                  dplyr::filter(mic != 0) %>%
-                                  group_by(id) %>%
-                                  dplyr::summarise(n_mic = length(unique(mic))) %>%
-                                  ungroup(),
-                                by = "id") %>%
-                      dplyr::filter(!is.na(n_mic)),
-                    aes(fill = n_mic), color = NA) +
+                               left_join(values_extra_ref %>%
+                                           st_drop_geometry() %>%
+                                           dplyr::filter(mic != 0) %>%
+                                           group_by(id) %>%
+                                           dplyr::summarise(n_mic = length(unique(mic))) %>%
+                                           ungroup(),
+                                         by = "id") %>%
+                               dplyr::filter(!is.na(n_mic)),
+                             ggplot2::aes(fill = n_mic), color = NA) +
             ggplot2::scale_fill_viridis_c(name = NULL) +
             ggplot2::theme_bw() +
-            ggplot2::theme(panel.background = element_rect(fill = "white"),
-                  legend.position = "top",
-                  legend.direction = "horizontal") +
+            ggplot2::theme(panel.background = ggplot2::element_rect(fill = "white"),
+                           legend.position = "top",
+                           legend.direction = "horizontal") +
             ggplot2::labs(title = paste("Number of unique daily 'Most influential variable on extrapolations' over the entire period per cell:")) +
             ggplot2::coord_sf(xlim = c(min(static$X), max(static$X)),
-                     ylim = c(min(static$Y), max(static$Y)),
-                     expand = F))
+                              ylim = c(min(static$Y), max(static$Y)),
+                              expand = F))
 
     print(ggplot2::ggplot() +
             ggplot2::geom_sf(data = study_area, fill = "white", alpha = 0.1) +
             ggplot2::geom_sf(data = static_sf %>%
-                      left_join(values_nearby_ref %>%
-                                  st_drop_geometry() %>%
-                                  group_by(id) %>%
-                                  dplyr::reframe(value = c(mean(perc_nearby, na.rm = T),
-                                                           median(perc_nearby, na.rm = T),
-                                                           min(perc_nearby, na.rm = T),
-                                                           max(perc_nearby, na.rm = T)),
-                                                 type = c("Mean", "Median", "Min", "Max")) %>%
-                                  dplyr::mutate(type = factor(type, levels = c("Mean", "Median", "Min", "Max"))),
-                                by = "id"),
-                    aes(fill = value), color = NA) +
+                               left_join(values_nearby_ref %>%
+                                           st_drop_geometry() %>%
+                                           group_by(id) %>%
+                                           dplyr::reframe(value = c(mean(perc_nearby, na.rm = T),
+                                                                    median(perc_nearby, na.rm = T),
+                                                                    min(perc_nearby, na.rm = T),
+                                                                    max(perc_nearby, na.rm = T)),
+                                                          type = c("Mean", "Median", "Min", "Max")) %>%
+                                           dplyr::mutate(type = factor(type, levels = c("Mean", "Median", "Min", "Max"))),
+                                         by = "id"),
+                             ggplot2::aes(fill = value), color = NA) +
             ggplot2::scale_fill_viridis_c(name = "% nearby"
             ) +
             ggplot2::facet_wrap(~ type) +
             ggplot2::theme_bw() +
-            ggplot2::theme(panel.background = element_rect(fill = "white"),
-                  legend.position = "top",
-                  legend.direction = "horizontal") +
+            ggplot2::theme(panel.background = ggplot2::element_rect(fill = "white"),
+                           legend.position = "top",
+                           legend.direction = "horizontal") +
             ggplot2::labs(title = paste("Summary of the Nearby data per cell over the entire period")) +
             ggplot2::coord_sf(xlim = c(min(static$X), max(static$X)),
-                     ylim = c(min(static$Y), max(static$Y)),
-                     expand = F))
+                              ylim = c(min(static$Y), max(static$Y)),
+                              expand = F))
     ## per year/date
 
     ExDet <- values_extra_ref %>%
@@ -364,45 +364,45 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
       print(ggplot2::ggplot() +
               ggplot2::geom_sf(data = study_area, fill = "white", alpha = 0.1) +
               ggplot2::geom_sf(data = values_extra %>%
-                        dplyr::filter(ExDet < 0),
-                      aes(fill = -ExDet), color = NA) +
-              scale_fill_continuous_sequential(palette = "Reds 3", begin = .15, name = "Univariate",
-                                               limits = c(min(-1*ExDet[ExDet < 0], na.rm = T),
-                                                          max(-1*ExDet[ExDet < 0], na.rm = T))) +
+                                 dplyr::filter(ExDet < 0),
+                               ggplot2::aes(fill = -ExDet), color = NA) +
+              colorspace::scale_fill_continuous_sequential(palette = "Reds 3", begin = .15, name = "Univariate",
+                                                           limits = c(min(-1*ExDet[ExDet < 0], na.rm = T),
+                                                                      max(-1*ExDet[ExDet < 0], na.rm = T))) +
               # scale_color_continuous_sequential(palette = "Reds 3", begin = .15, name = "Univariate",
               #                                   limits = c(min(-1*ExDet[ExDet < 0], na.rm = T),
               #                                              max(-1*ExDet[ExDet < 0], na.rm = T))) +
-              new_scale_fill() +
+              ggnewscale::new_scale_fill() +
               # new_scale_color() +
               ggplot2::geom_sf(data = values_extra %>%
-                        dplyr::filter(ExDet >= 0 & ExDet <= 1),
-                      aes(fill = ExDet), color = NA) +
-              scale_fill_continuous_sequential(palette = "Greens 3", begin = .15, name = "Analog",
-                                               limits = c(min(ExDet[ExDet >= 0 & ExDet <= 1], na.rm = T),
-                                                          max(ExDet[ExDet >= 0 & ExDet <= 1], na.rm = T))) +
+                                 dplyr::filter(ExDet >= 0 & ExDet <= 1),
+                               ggplot2::aes(fill = ExDet), color = NA) +
+              colorspace::scale_fill_continuous_sequential(palette = "Greens 3", begin = .15, name = "Analog",
+                                                           limits = c(min(ExDet[ExDet >= 0 & ExDet <= 1], na.rm = T),
+                                                                      max(ExDet[ExDet >= 0 & ExDet <= 1], na.rm = T))) +
               # scale_color_continuous_sequential(palette = "Greens 3", begin = .15, name = "Analog",
               #                                   limits = c(min(ExDet[ExDet >= 0 & ExDet <= 1], na.rm = T),
               #                                              max(ExDet[ExDet >= 0 & ExDet <= 1], na.rm = T))) +
-              new_scale_fill() +
+              ggnewscale::new_scale_fill() +
               # new_scale_color() +
               ggplot2::geom_sf(data = values_extra %>%
-                        dplyr::filter(ExDet > 1),
-                      aes(fill = ExDet), color = NA) +
-              scale_fill_continuous_sequential(palette = "Purples 3", begin = .15, name = "Combinatorial",
-                                               limits = c(min(ExDet[ExDet > 1], na.rm = T),
-                                                          max(ExDet[ExDet > 1], na.rm = T))) +
+                                 dplyr::filter(ExDet > 1),
+                               ggplot2::aes(fill = ExDet), color = NA) +
+              colorspace::scale_fill_continuous_sequential(palette = "Purples 3", begin = .15, name = "Combinatorial",
+                                                           limits = c(min(ExDet[ExDet > 1], na.rm = T),
+                                                                      max(ExDet[ExDet > 1], na.rm = T))) +
               # scale_color_continuous_sequential(palette = "Purples 3", begin = .15, name = "Combinatorial",
               #                                   limits = c(min(ExDet[ExDet > 1], na.rm = T),
               #                                              max(ExDet[ExDet > 1], na.rm = T))) +
               ggplot2::facet_wrap(~ date, ncol = 10) +
               ggplot2::theme_bw() +
-              ggplot2::theme(panel.background = element_rect(fill = "white"),
-                    legend.position = "top",
-                    legend.direction = "horizontal") +
+              ggplot2::theme(panel.background = ggplot2::element_rect(fill = "white"),
+                             legend.position = "top",
+                             legend.direction = "horizontal") +
               ggplot2::labs(title = paste(yr, ":", "Extrapolations and analog predictions")) +
               ggplot2::coord_sf(xlim = c(min(static$X), max(static$X)),
-                       ylim = c(min(static$Y), max(static$Y)),
-                       expand = F))
+                                ylim = c(min(static$Y), max(static$Y)),
+                                expand = F))
 
     }
 
@@ -427,26 +427,26 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
       print(ggplot2::ggplot() +
               ggplot2::geom_sf(data = study_area, fill = "white", alpha = 0.1) +
               ggplot2::geom_sf(data = values_mic %>%
-                        dplyr::mutate(mic = factor(mic, levels = variable)),
-                      aes(fill = mic), color = NA) +
+                                 dplyr::mutate(mic = factor(mic, levels = variable)),
+                               ggplot2::aes(fill = mic), color = NA) +
               ggplot2::scale_fill_viridis_d(name = NULL) +
               # scale_color_viridis_d(direction = -1) +
               ggplot2::facet_wrap(~ date, ncol = 10) +
               ggplot2::theme_bw() +
-              ggplot2::theme(panel.background = element_rect(fill = "white"),
-                    legend.position = "top",
-                    legend.direction = "horizontal") +
+              ggplot2::theme(panel.background = ggplot2::element_rect(fill = "white"),
+                             legend.position = "top",
+                             legend.direction = "horizontal") +
               ggplot2::labs(title = paste(yr, ":", "Most influential variable on extrapolations")) +
               ggplot2::coord_sf(xlim = c(min(static$X), max(static$X)),
-                       ylim = c(min(static$Y), max(static$Y)),
-                       expand = F))
+                                ylim = c(min(static$Y), max(static$Y)),
+                                expand = F))
 
       # print(ggplot() +
       #         geom_sf(data = study_area, fill = "white", alpha = 0.1) +
       #         geom_sf(data = values_mic %>%
       #                   dplyr::filter(mic %in% groups[[1]]) %>%
       #                   dplyr::mutate(mic = factor(mic, levels = (groups[[1]])[groups[[1]] %in% list_mic])),
-      #                 aes(fill = mic, color = mic)) +
+      #                 ggplot2::aes(fill = mic, color = mic)) +
       #         scale_fill_manual(values = sequential_hcl(
       #           n        = 4,       # number of discrete categories you need
       #           palette  = "Greens 3", # base palette name
@@ -465,7 +465,7 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
       #         geom_sf(data = values_mic %>%
       #                   dplyr::filter(mic %in% groups[[2]]) %>%
       #                   dplyr::mutate(mic = factor(mic, levels = (groups[[2]])[groups[[2]] %in% list_mic])),
-      #                 aes(fill = mic, color = mic)) +
+      #                 ggplot2::aes(fill = mic, color = mic)) +
       #         scale_fill_manual(values = sequential_hcl(
       #           n        = 4,       # number of discrete categories you need
       #           palette  = "Reds 3", # base palette name
@@ -484,7 +484,7 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
       #         geom_sf(data = values_mic %>%
       #                   dplyr::filter(mic %in% groups[[3]]) %>%
       #                   dplyr::mutate(mic = factor(mic, levels = (groups[[3]])[groups[[3]] %in% list_mic])),
-      #                 aes(fill = mic, color = mic)) +
+      #                 ggplot2::aes(fill = mic, color = mic)) +
       #         scale_fill_manual(values = sequential_hcl(
       #           n        = 4,       # number of discrete categories you need
       #           palette  = "YlOrBr", # base palette name
@@ -503,7 +503,7 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
       #         geom_sf(data = values_mic %>%
       #                   dplyr::filter(mic %in% groups[[4]]) %>%
       #                   dplyr::mutate(mic = factor(mic, levels = (groups[[4]])[groups[[4]] %in% list_mic])),
-      #                 aes(fill = mic, color = mic)) +
+      #                 ggplot2::aes(fill = mic, color = mic)) +
       #         scale_fill_manual(values = sequential_hcl(
       #           n        = 4,       # number of discrete categories you need
       #           palette  = "Blues 3", # base palette name
@@ -519,7 +519,7 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
       #
       #         facet_wrap(~ date, ncol = 10) +
       #         theme_bw() +
-      #         theme(panel.background = element_rect(fill = "white"),
+      #         theme(panel.background = ggplot2::element_rect(fill = "white"),
       #               legend.position = "top",
       #               legend.direction = "horizontal") +
       #         labs(title = paste(yr, ":", "Most influential variable on extrapolations")) +
@@ -539,24 +539,24 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
       print(ggplot2::ggplot() +
               ggplot2::geom_sf(data = study_area, fill = "white", alpha = 0.1) +
               ggplot2::geom_sf(data = values_nearby,
-                      aes(fill = perc_nearby), color = NA) +
+                               ggplot2::aes(fill = perc_nearby), color = NA) +
               ggplot2::scale_fill_viridis_c(name = "% nearby",
-                                   breaks = seq(0, floor(max(values_nearby_ref$perc_nearby, na.rm = T)*10)/10, length = 5),
-                                   labels = function(breaks) {round(breaks, 0)},
-                                   limits = c(0, max(values_nearby_ref$perc_nearby, na.rm = T))) +
+                                            breaks = seq(0, floor(max(values_nearby_ref$perc_nearby, na.rm = T)*10)/10, length = 5),
+                                            labels = function(breaks) {round(breaks, 0)},
+                                            limits = c(0, max(values_nearby_ref$perc_nearby, na.rm = T))) +
               # scale_color_viridis_c(name = "% nearby",
               #                       breaks = seq(0, floor(max(values_nearby_ref$perc_nearby, na.rm = T)*10)/10, length = 5),
               #                       limits = c(0, max(values_nearby_ref$perc_nearby, na.rm = T)),
               #                       guide = "none") +
               ggplot2::facet_wrap(~ date, ncol = 10) +
               ggplot2::theme_bw() +
-              ggplot2::theme(panel.background = element_rect(fill = "white"),
-                    legend.position = "top",
-                    legend.direction = "horizontal") +
+              ggplot2::theme(panel.background = ggplot2::element_rect(fill = "white"),
+                             legend.position = "top",
+                             legend.direction = "horizontal") +
               ggplot2::labs(title = paste(yr, ":", "Nearby data")) +
               ggplot2::coord_sf(xlim = c(min(static$X), max(static$X)),
-                       ylim = c(min(static$Y), max(static$Y)),
-                       expand = F))
+                                ylim = c(min(static$Y), max(static$Y)),
+                                expand = F))
     }
   })
   ##############
