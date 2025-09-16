@@ -3,8 +3,9 @@
 #' @param n
 #' @param target_study_area
 #' @param data
-#' @param keep_point
 #' @param n_try
+#' @param number_points
+#' @param max_buffer
 #'
 #' @return
 #' @export
@@ -13,13 +14,15 @@
 create_soap <- function(n,
                         target_study_area, # sf polygon object
                         data, # sf object
-                        keep_point = 1, ## simplification of the study area : more polygons and more points in each polygons are in the output,
+                        number_points = 80,
+                        max_buffer = 20, # km
+                        # keep_point = 1, ## simplification of the study area : more polygons and more points in each polygons are in the output,
                         ## higher will be the model uncertainties in some areas of low effort coverage. If effort is high
                         ## in every locations, should be okay
                         ### on my part I had to find a compromise between the buffer and the ratio of simplify to not cut a part of the study area
                         ## and to diminush at maximum the number of polygons & points per polygons
                         n_try = 25  # number of tries to optimize the location of knots, in order to get the lower number of knots possible inside
-                        ) {
+) {
 
   cat("Function will place", n, "x", n, "knots on X,Y (ETRS3035) and will retain only those contained within the soap boundaries ",
       paste0("(maximum possible number of knots: ", n*n, ").\n"))
@@ -42,13 +45,64 @@ create_soap <- function(n,
   ####
   target_study_area <- target_study_area %>%
     st_transform(crs = 3035) %>%
+    group_by() %>%
+    dplyr::summarise(do_union = T) %>%
+    st_cast("MULTIPOLYGON")  %>%
     st_simplify()
+
+  n_tot <- st_coordinates(target_study_area) %>%
+    nrow()
 
   data <- data %>%
     st_transform(crs = 3035) %>%
     st_centroid() %>%
     mutate(x = st_coordinates(.)[,1],
            y = st_coordinates(.)[,2])
+
+  check_buffer <- map_dfr(seq(0, max_buffer, length = n_try), function(b) {
+    # check_keep <- map_dfr(seq(n_min_keep/n_tot, n_keep/n_tot, length = 5), function(k) {
+    # cat(b, k, "\n")
+
+    zone_simp <- target_study_area %>%
+      st_buffer(units::set_units(b, km)) %>%
+      rmapshaper::ms_simplify(keep = number_points / n_tot, keep_shapes=T) #%>%
+    # group_by() %>%
+    # dplyr::summarise(do_union = T) %>%
+    # st_cast("MULTIPOLYGON") ## simplify sf object of the study area
+
+    missing_points <- data %>%
+      dplyr::filter(!c(st_intersects(.,
+                                     zone_simp,
+                                     sparse = FALSE)))
+
+    if (nrow(missing_points) > 0) {
+      # Distance from missing points to polygon
+      max_dist <- max(st_distance(missing_points, zone_simp))
+
+      zone_simp <- zone_simp %>%
+        st_buffer(units::set_units(max_dist, m)) %>%
+        st_simplify()
+    }
+
+    return(data.frame(buffer = b,
+                      # keep = k,
+                      difference_outside = zone_simp %>%
+                        st_difference(target_study_area) %>%
+                        st_area() %>%
+                        units::drop_units(),
+                      difference_inside = target_study_area %>%
+                        st_difference(zone_simp) %>%
+                        st_area() %>%
+                        units::drop_units()))
+    # })
+  })
+
+  check_buffer <- check_buffer %>%
+    dplyr::mutate(diff = abs(difference_outside - difference_inside)) %>%
+    arrange(diff)
+
+  b <- check_buffer$buffer[1]
+  # keep_point <- check_buffer$keep[1]
 
   xmin  <- min(data$x)
   xmax  <- max(data$x)
@@ -79,7 +133,7 @@ create_soap <- function(n,
   # if (method == "max") {
   #   which <- which.max(which)
   # } else if (method == "min") {
-    which <- which.min(which)
+  which <- which.min(which)
   # }
 
   knots <- list_point + cbind(x = rep(adjust[which, 1], nrow(list_point)),
@@ -87,7 +141,8 @@ create_soap <- function(n,
     as.data.frame() ## create results of the location of the knots
 
   zone_simp <- target_study_area %>%
-    ms_simplify(keep = keep_point, keep_shapes=T) ## simplify sf object of the study area
+    st_buffer(units::set_units(b, km)) %>%
+    rmapshaper::ms_simplify(keep = number_points / n_tot, keep_shapes=T) ## simplify sf object of the study area
 
   missing_points <- data %>%
     dplyr::filter(!c(st_intersects(.,
@@ -96,11 +151,11 @@ create_soap <- function(n,
 
   if (nrow(missing_points) > 0) {
     # Distance from missing points to polygon
-    max_dist <- max(st_distance(missing_points, zone_simp)) / 1000
+    max_dist <- max(st_distance(missing_points, zone_simp))
 
-    # Buffer polygon outward by max_dist
     zone_simp <- zone_simp %>%
-      st_buffer(units::set_units(max_dist, "km"))
+      st_buffer(units::set_units(max_dist, m)) %>%
+      st_simplify()
   }
 
   line <- as.data.frame(zone_simp %>%
@@ -124,13 +179,13 @@ create_soap <- function(n,
     as.data.frame()
 
   print(ggplot() +
-          geom_sf(data = target_study_area, fill = "alice_blue", color = "midnightblue") +
+          geom_sf(data = target_study_area, fill = "aliceblue", color = "midnightblue") +
           geom_sf(data = data, fill = "orange", color = "orange", size = .5) +
           geom_path(data = map_dfr(1:length(bnd), function(b) {
             return(data.frame(X = bnd[[b]]$X,
                               Y = bnd[[b]]$Y) %>%
                      dplyr::mutate(id = b))
-          }), aes(x = X, y = Y, group = id), color = "black") +
+          }), aes(x = X, y = Y, group = id), color = "brown", linewidth = 2) +
           geom_point(data = knots, aes(x = X, y = Y), color = "red", size = 2) +
           labs(title = "Soap boundaries and knots, overlaying the study area and data:") +
           theme_bw() +

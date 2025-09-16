@@ -4,10 +4,17 @@
 \alias{create_soap}
 \title{create soap smooth object for DSM}
 \usage{
-create_soap(n, target_study_area, data, keep_point = 1, n_try = 25)
+create_soap(
+  n,
+  target_study_area,
+  data,
+  number_points = 80,
+  max_buffer = 20,
+  n_try = 25
+)
 }
 \arguments{
-\item{n_try}{}
+\item{max_buffer}{}
 }
 \description{
 create soap smooth object for DSM

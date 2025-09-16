@@ -176,8 +176,8 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
   ##############
   run_dsmextra_chunk <- quote({
     cat("\n\n<br><br>")
-    cat("#### variable used for gap analysis: all", paste0("(", paste(variable, collapse = ", "), ")"))
-    cat("<br><br>\n\n")
+    knitr::asis_output("#### variable used for gap analysis:", paste(variable, collapse = ", "), "\n\n")
+    # cat("<br><br>\n\n")
 
     cat("Years present in calibration data:", paste0(sort(unique(seg_data$year)),
                                                      collapse = ", "))

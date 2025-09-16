@@ -22,8 +22,8 @@
 #'
 #' @examples
 extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
-                        all_time.period, dates, lonmin = -Inf, latmin = -Inf, lonmax = Inf,
-                        latmax = Inf, Number_starting_name_file_set = 1, n_cores = NULL, outfile = "log.txt")
+                         all_time.period, dates, lonmin = -Inf, latmin = -Inf, lonmax = Inf,
+                         latmax = Inf, Number_starting_name_file_set = 1, n_cores = NULL, outfile = "log.txt")
 {
   if (any(is.na(dates))) {
     stop("There is NA in the 'dates' object")
@@ -582,7 +582,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                 }
                 else {
                   if (any(c("SDspace", "mean") %in% pred.type) &
-                      any(c("center", "SDtime") %in% pred.type)) {
+                      (any(c("center", "SDtime") %in% pred.type) & pixel.radius == all_pixel.radius[1])) {
                     # outf <- outM[t %in% (max(all_time.period) - time.period + 1):numtimes,
                     #              c(setNames(lapply(.SD[,..cols1], mean, na.rm = TRUE), paste0(cols1, ".mean")),
                     #                setNames(lapply(.SD[,..cols1], sd, na.rm = TRUE), paste0(cols1, ".SDtime")),

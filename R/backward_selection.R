@@ -1,12 +1,47 @@
+#' Title
+#'
+#' @param variable
+#' @param seg_data
+#' @param response
+#' @param spline_to_add
+#' @param soap
+#' @param offset_effort
+#' @param treshold_discrete
+#' @param max_correlation
+#' @param Pvalue_max
+#'
+#' @return
+#' @export
+#'
+#' @examples
 backward_selection <- function(variable,
+                               smoother = function(variable,
+                                                   bs,
+                                                   complexity) {
+                                 return(paste0("s(", variable, ", bs = '", bs, "', k = ", complexity, ")"))
+                               }, # input can be a modified function to modify the smoothers
+                               bs = "cs",
+                               complexity = 10,
                                seg_data,
                                response,
-                               ...complexity...) { # use actually the code from CoastalFutues
+                               spline_to_add = NULL, # can be static or anything else that wont be part of the selection and in all models
+                               soap = list(bnd = NULL, knots = NULL, coordinates = c("X", "Y")),
+                               offset_effort = "effort_km2",
+                               treshold_discrete = 25,
+                               max_correlation = .5,
+                               Pvalue_max = .05) { # use actually the code from CoastalFutues
 
   covariates <- variable
 
+  bnd <- soap$bnd
+  knots <- soap$knots
+
+  seg_data <- seg_data %>%
+    st_drop_geometry() %>%
+    as.data.frame()
+
   seg_data_init <- seg_data %>%
-    dplyr::select(all_of(covariates), effort_km2, ppho, X, Y) %>%
+    dplyr::select(all_of(c(covariates, offset_effort)), ppho, X, Y) %>%
     drop_na() %>%
     as.data.frame()
 
@@ -14,10 +49,10 @@ backward_selection <- function(variable,
 
   rescale2 <- function (ynew, y = NULL)
   {
-    assert_that(is.numeric(ynew) && is.vector(ynew) && length(ynew) >=
-                  3)
-    assert_that((is.numeric(y) && is.vector(y) && length(y) >=
-                   3) || is.null(y))
+    # assert_that(is.numeric(ynew) && is.vector(ynew) && length(ynew) >=
+    #               3)
+    # assert_that((is.numeric(y) && is.vector(y) && length(y) >=
+    #                3) || is.null(y))
     if (is.null(y)) {
       out <- (ynew - mean(ynew, na.rm = TRUE))/(sd(ynew, na.rm = TRUE))
     }
@@ -32,24 +67,54 @@ backward_selection <- function(variable,
   seg_data_scale <- as.data.frame(seg_data_scale)
 
   model <- paste0(response, " ~ 1 + ",
-                  "te(X, Y, bs = c('cs', 'cs')) + ",
-                  paste(paste0("s(", covariates, ", bs = 'cs', k = 10) + "), collapse = ""),
-                  "offset(I(log(effort_km2)))")
+                  ifelse(all(!is.null(bnd)),
+                         paste0(" + s(", soap$coordinates[1], ", ", soap$coordinates[2], ", bs = 'so', xt = list(bnd = bnd))"),
+                         ""),
+                  # paste(paste0("s(", covariates, ", bs = 'cs', k = 10)"), collapse = " + "),
+                  paste(smoother(variable = covariates, bs = bs, complexity = complexity), collapse = " + "),
+                  ifelse(!is.null(offset_effort),
+                         paste0("+ offset(I(log(", offset_effort, ")))"),
+                         ""),
+                  ifelse(!is.null(spline_to_add),
+                         paste0(" + ", spline_to_add),
+                         ""))
 
-  model_it <- mgcv::gam(as.formula(model),
-                        method = "REML",
-                        family = nb(),
-                        data = seg_data_scale
-  )
+  # cat(model)
 
-  print(gratia::draw(model_it, rug = F))
+  if (length(covariates) > treshold_discrete) {
+    model_it <- mgcv::bam(as.formula(model),
+                          method = "fREML",
+                          nthreads = detectCores() - 1,
+                          discrete=T,
+                          family = nb(),
+                          knots = knots,
+                          data = seg_data_scale
+    )
+  } else {
+    model_it <- mgcv::gam(as.formula(model),
+                          method = "REML",
+                          family = nb(),
+                          knots = knots,
+                          data = seg_data_scale
+    )
+  }
+
+  # try(print(gratia::draw(model_it, rug = F)))
 
   csm <- summary(model_it)
 
-  table_var <- data.frame(var = c("XY", covariates),
-                          pvalues = abs(csm$s.pv),
+  var <- na.omit(c(ifelse(all(!is.null(bnd)),
+                          paste0("soap ", soap$coordinates[1], ",", soap$coordinates[2]),
+                          NA),
+                   covariates))
+
+  table_var <- data.frame(pvalues = abs(csm$s.pv),
                           chi = csm$chi.sq) %>%
-    dplyr::filter(var != "XY") %>%
+    dplyr::mutate(var = na.omit(c(var,
+                                  ifelse(n() > length(var),
+                                         1:(n() - length(var)),
+                                         NA)))) %>%
+    dplyr::filter(var %in% covariates) %>%
     arrange(pvalues, -chi)
 
   rho <- cor(seg_data_scale %>%
@@ -58,15 +123,18 @@ backward_selection <- function(variable,
   diag(rho) <- 0
 
   all_thresholds <- c(.99, .9, .8, .7, .5)
+  all_thresholds <- unique(c(all_thresholds[all_thresholds > max_correlation], max_correlation))
 
-  print(max(rho))
+  # print(max(rho))
+
+  remove_v <- c()
 
   ### correlations
   for (thresh_cor in all_thresholds) {
     while (any(rho > thresh_cor)) { #  | any(table_var$pvalues > .05)
       cat("Threshold:", thresh_cor, ". Max correlation:", print(round(max(rho), 2)), ". Max P-value:", max(round(table_var$pvalues, 3)), ".\n")
 
-      rc <- which(map_dbl(1:nrow(rho), function(r) {return(max(abs(rho[r, ]), na.rm = T))}) > tcor)
+      rc <- which(map_dbl(1:nrow(rho), function(r) {return(max(abs(rho[r, ]), na.rm = T))}) > thresh_cor)
 
       to_rem <- table_var %>%
         dplyr::filter(var %in% covariates[rc]) %>%
@@ -82,9 +150,9 @@ backward_selection <- function(variable,
             paste(., collapse = " / "), "(P:",
           to_rem  %>%
             pull(pvalues) %>%
-            paste(., collapse = " / "), ", cor:", round(rc[match(to_rem %>%
-                                                                   pull(var),
-                                                                 covariates)], 2),
+            paste(round(., 3), collapse = " / "), ", cor:", round(max(rho[match(to_rem %>%
+                                                                                  pull(var),
+                                                                                covariates), ]), 3),
           ") removed   ---  ",
           length(covariates) - 1, "left.\nRemoved:",
           paste(remove_v, collapse = ", "), "\n")
@@ -94,26 +162,54 @@ backward_selection <- function(variable,
 
       covariates <- covariates[!(covariates %in% to_rem)]
 
-      model <- paste0("ppho ~ 1 + ",
-                      "te(X, Y, bs = c('cs', 'cs')) + ",
-                      paste(paste0("s(", covariates, ", bs = 'cs', k = 10) + "), collapse = ""),
-                      "offset(I(log(effort_km2)))")
+      model <- paste0(response, " ~ 1 + ",
+                      ifelse(all(!is.null(bnd)),
+                             paste0(" + s(", soap$coordinates[1], ", ", soap$coordinates[2], ", bs = 'so', xt = list(bnd = bnd))"),
+                             ""),
+                      # paste(paste0("s(", covariates, ", bs = 'cs', k = 10)"), collapse = " + "),
+                      paste(smoother(variable = covariates, bs = bs, complexity = complexity), collapse = " + "),
+                      ifelse(!is.null(offset_effort),
+                             paste0("+ offset(I(log(", offset_effort, ")))"),
+                             ""),
+                      ifelse(!is.null(spline_to_add),
+                             paste0(" + ", spline_to_add),
+                             ""))
 
-      model_it <- mgcv::gam(as.formula(model),
-                            method = "REML",
-                            family = nb(),
-                            data = seg_data_scale
-      )
+      if (length(covariates) > treshold_discrete) {
+        model_it <- mgcv::bam(as.formula(model),
+                              method = "fREML",
+                              nthreads = detectCores() - 1,
+                              discrete=T,
+                              family = nb(),
+                              knots = knots,
+                              data = seg_data_scale
+        )
+      } else {
+        model_it <- mgcv::gam(as.formula(model),
+                              method = "REML",
+                              family = nb(),
+                              knots = knots,
+                              data = seg_data_scale
+        )
+      }
 
-      print(gratia::draw(model_it, rug = F))
-      Sys.sleep(2)
+      # try(print(gratia::draw(model_it, rug = F)))
+      # Sys.sleep(2)
 
       csm <- summary(model_it)
 
-      table_var <- data.frame(var = c("XY", covariates),
-                              pvalues = abs(csm$s.pv),
+      var <- na.omit(c(ifelse(all(!is.null(bnd)),
+                              paste0("soap ", soap$coordinates[1], ",", soap$coordinates[2]),
+                              NA),
+                       covariates))
+
+      table_var <- data.frame(pvalues = abs(csm$s.pv),
                               chi = csm$chi.sq) %>%
-        dplyr::filter(var != "XY") %>%
+        dplyr::mutate(var = na.omit(c(var,
+                                      ifelse(n() > length(var),
+                                             1:(n() - length(var)),
+                                             NA)))) %>%
+        dplyr::filter(var %in% covariates) %>%
         arrange(pvalues, -chi)
 
       rho <- cor(seg_data_scale %>%
@@ -121,86 +217,83 @@ backward_selection <- function(variable,
 
       diag(rho) <- 0
 
-      print(table_var)
+      print(table_var %>%
+              dplyr::select(-var))
 
       gc()
     }
   }
 
   ### p values
-  while (any(table_var$pvalues > .05)) {
-    print(table_var[nrow(table_var), ])
+  while (any(table_var$pvalues > Pvalue_max)) {
+    print(table_var[nrow(table_var), ] %>%
+            dplyr::select(-var))
     cat("Removed    ---   ", nrow(table_var) - 1, "left\n")
 
     table_var <- table_var[-nrow(table_var), ]
 
     covariates <- table_var$var
 
-    model <- paste0("ppho ~ 1 + ",
-                    "te(X, Y, bs = c('cs', 'cs')) + ",
-                    paste(paste0("s(", covariates, ", bs = 'cs', k = 10) + "), collapse = ""),
-                    "offset(I(log(effort_km2)))")
+    model <- paste0(response, " ~ 1 + ",
+                    ifelse(all(!is.null(bnd)),
+                           paste0(" + s(", soap$coordinates[1], ", ", soap$coordinates[2], ", bs = 'so', xt = list(bnd = bnd))"),
+                           ""),
+                    # paste(paste0("s(", covariates, ", bs = 'cs', k = 10)"), collapse = " + "),
+                    paste(smoother(variable = covariates, bs = bs, complexity = complexity), collapse = " + "),
+                    ifelse(!is.null(offset_effort),
+                           paste0("+ offset(I(log(", offset_effort, ")))"),
+                           ""),
+                    ifelse(!is.null(spline_to_add),
+                           paste0(" + ", spline_to_add),
+                           ""))
 
-    model_it <- mgcv::gam(as.formula(model),
-                          method = "REML",
-                          family = nb(),
-                          data = seg_data_scale
-    )
+    if (length(covariates) > treshold_discrete) {
+      model_it <- mgcv::bam(as.formula(model),
+                            method = "fREML",
+                            nthreads = detectCores() - 1,
+                            discrete=T,
+                            family = nb(),
+                            knots = knots,
+                            data = seg_data_scale
+      )
+    } else {
+      model_it <- mgcv::gam(as.formula(model),
+                            method = "REML",
+                            family = nb(),
+                            knots = knots,
+                            data = seg_data_scale
+      )
+    }
 
-    print(gratia::draw(model_it, rug = F))
-    Sys.sleep(2)
+    # try(print(gratia::draw(model_it, rug = F)))
+    # Sys.sleep(2)
 
     csm <- summary(model_it)
 
-    table_var <- data.frame(var = c("XY", covariates),
-                            pvalues = abs(csm$s.pv),
+    var <- na.omit(c(ifelse(all(!is.null(bnd)),
+                            paste0("soap ", soap$coordinates[1], ",", soap$coordinates[2]),
+                            NA),
+                     covariates))
+
+    table_var <- data.frame(pvalues = abs(csm$s.pv),
                             chi = csm$chi.sq) %>%
-      dplyr::filter(var != "XY") %>%
+      dplyr::mutate(var = na.omit(c(var,
+                                    ifelse(n() > length(var),
+                                           1:(n() - length(var)),
+                                           NA)))) %>%
+      dplyr::filter(var %in% covariates) %>%
       arrange(pvalues, -chi)
 
-    print(table_var)
+    print(table_var %>%
+            dplyr::select(-var))
 
     gc()
   }
 
-  # while (nrow(table_var) > 8) {
-  #   print(table_var[nrow(table_var), ])
-  #   cat("Removed    ---   ", nrow(table_var) - 1, "left\n")
-  #
-  #   table_var <- table_var[-nrow(table_var), ]
-  #
-  #   covariates <- table_var$var
-  #
-  #   model <- paste0("ppho ~ 1 + ",
-  #                   paste(paste0("s(", covariates, ", bs = 'cs', k = 10) + "), collapse = ""),
-  #                   "te(X, Y, bs = c('cs', 'cs')) + ",
-  #                   "offset(I(log(effort_km2)))")
-  #
-  #   model_it <- mgcv::gam(as.formula(model),
-  #                         method = "REML",
-  #                         family = nb(),
-  #                         data = seg_data_scale
-  #   )
-  #
-  #   print(gratia::draw(model_it, rug = F))
-  #   Sys.sleep(2)
-  #
-  #   csm <- summary(model_it)
-  #
-  #   table_var <- data.frame(var = c(covariates, "XY"),
-  #                           pvalues = abs(csm$s.pv),
-  #                           chi = csm$chi.sq) %>%
-  #     dplyr::filter(var != "XY") %>%
-  #     arrange(pvalues, -chi)
-  #
-  #   print(table_var)
-  #
-  #   gc()
-  # }
-
   model_actual <- mgcv::gam(as.formula(model),
                             method = "REML",
                             family = nb(),
+                            knots = knots,
                             data = seg_data_init)
 
   final_file <- list(n_best = 1,
@@ -225,4 +318,6 @@ backward_selection <- function(variable,
                      splines_by = NULL,
 
                      random = NULL)
+
+  return(final_file)
 }

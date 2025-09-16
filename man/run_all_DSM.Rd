@@ -8,14 +8,17 @@ run_all_DSM(
   segdata_obs,
   response = "ppho",
   predictors,
-  spatial_options = list(by = NULL, complexity = NA),
-  soap = list(xt = NULL, knots = NULL),
-  max_cor = 0.5,
-  splines_bs = "cs",
-  complexity = 4,
+  smoother = function(variable, bs, complexity) {
+     return(paste0("s(", variable,
+    ", bs = '", bs, "', k = ", complexity, ")"))
+ },
+  complexity = 10,
+  bs = "cs",
+  spline_to_add = NULL,
+  soap = list(bnd = NULL, knots = NULL, coordinates = c("X", "Y")),
+  max_correlation = 0.5,
   use_loo = FALSE,
-  random = NULL,
-  offset_effort = NULL,
+  offset_effort = "effort_km2",
   method = "REML",
   nb_min_pred = 1,
   nb_max_pred = 3,
@@ -30,30 +33,18 @@ run_all_DSM(
   force_include = NULL,
   fit_with_actual_data = T,
   use_select = F,
-  spline_to_add = NULL,
   dataset_4correlation = NULL,
   data_valid_loo = NULL,
-  list_knots = NULL,
   ncores = NULL,
   outfile = "logs.txt",
   first_try = F,
   first_try_AIC = F,
-  by_complexity = NULL,
-  by_te = F,
-  use_ti = F,
-  all_in_te = F,
-  list_knots2 = NULL,
-  splines_by = NULL,
-  no_by = NULL,
-  no_by2 = NULL,
-  month_spline_bs = F,
   likelihood = "negbin",
-  fit_models = T,
-  verbose = FALSE
+  fit_models = T
 )
 }
 \arguments{
-\item{verbose}{}
+\item{fit_models}{}
 }
 \description{
 with all combinations of covariates desired, and return AIC and LOO metrics if desired.

@@ -5,13 +5,11 @@
 #' @param segdata_obs
 #' @param response
 #' @param predictors
-#' @param spatial_options
 #' @param soap
-#' @param max_cor
-#' @param splines_bs
+#' @param max_correlation
+#' @param bs
 #' @param complexity
 #' @param use_loo
-#' @param random
 #' @param offset_effort
 #' @param method
 #' @param nb_min_pred
@@ -30,23 +28,13 @@
 #' @param spline_to_add
 #' @param dataset_4correlation
 #' @param data_valid_loo
-#' @param list_knots
 #' @param ncores
 #' @param outfile
 #' @param first_try
 #' @param first_try_AIC
-#' @param by_complexity
-#' @param by_te
-#' @param use_ti
-#' @param all_in_te
-#' @param list_knots2
-#' @param splines_by
-#' @param no_by
-#' @param no_by2
-#' @param month_spline_bs
 #' @param likelihood
+#' @param smoother
 #' @param fit_models
-#' @param verbose
 #'
 #' @return
 #' @export
@@ -55,14 +43,30 @@
 run_all_DSM <- function (segdata_obs,
                          response = "ppho",
                          predictors,
-                         spatial_options = list(by = NULL, complexity = NA), # to use te(X, Y)
-                         soap = list(xt = NULL, knots = NULL), # to use soap
-                         max_cor = 0.5,
-                         splines_bs = "cs", # bs to use for the predictors. If spline_by is numeric and by_te = T, must be of length = length(spline_by) + 1. First element is used for bs of predictors, nexts are used for spline_by variables. You can set bs = "fs" or bs = "cs" for spline_by, which will be adapted correctly in the code.
-                         complexity = 4, # number of knots to use for the predictors.
+                         smoother = function(variable,
+                                             bs,
+                                             complexity) {
+                           return(paste0("s(", variable, ", bs = '", bs, "', k = ", complexity, ")"))
+                         },
+                         complexity = 10, # number of knots to use for the predictors.
+                         bs = "cs", # bs to use for the predictors. If spline_by is numeric and by_te = T, must be of length = length(spline_by) + 1. First element is used for bs of predictors, nexts are used for spline_by variables. You can set bs = "fs" or bs = "cs" for spline_by, which will be adapted correctly in the code.
+                         # spatial_options = list(by = NULL, complexity = NA), # to use te(X, Y)
+                         spline_to_add = NULL, # any spline to add to the model. It will be added as such in the model and values wont be scaled.
+                         soap = list(bnd = NULL, knots = NULL, coordinates = c("X", "Y")),
+                         max_correlation = 0.5,
                          use_loo = FALSE, # if model selection is used based on LOO (TRUE) or on AIC (FALSE)
-                         random = NULL, # random effect to add.
-                         offset_effort = NULL,
+                         # random = NULL, # random effect to add.
+                         # by_complexity = NULL, # if by_te, is the complexity of spline_by
+                         # list_knots = NULL, # xt argument in s() for covariates neither in no_by nor in no_by2
+                         # by_te = F, # to use te(predictors, spline_by) for each predictor no included in no_by
+                         # use_ti = F, # if by_te, you can use here ti(predictors, spline_by) and add to the model ti(spline_by)
+                         # all_in_te = F, # if you want to put all predictors in a single te(). Usually not more than 3 covariates possible.
+                         # list_knots2 = NULL, # xt argument in s() for covariates in no_by2
+                         # splines_by = NULL, # can be a factor or numeric, to fit te(predictors, spline_by) if by_te = T, or fitting s(predictors, spline_by) otherwise
+                         # no_by = NULL, # predictors that should be used alone - i.e. without spline_by interaction
+                         # no_by2 = NULL, # predictors that should be used only with 1 interaction - not too - in the case all_in_te = T
+                         # month_spline_bs  = F, # if you want to add a spline for month, using bs = cc
+                         offset_effort = "effort_km2", # let NULL otherwise
                          method = "REML",
                          nb_min_pred = 1,
                          nb_max_pred = 3,
@@ -77,30 +81,20 @@ run_all_DSM <- function (segdata_obs,
                          force_include = NULL,
                          fit_with_actual_data = T, # if you want to also return the best models fitted with non-scaled data, in addition to the usual return with scaled data. Will increase the computation time, depending on your model complexity.
                          use_select = F, # if you want to use select = T in mgcv::gam model fitting.
-                         spline_to_add = NULL, # any spline to add to the model. It will be added as such in the model and values wont be scaled.
                          dataset_4correlation = NULL, # data to use to check predictor correlations. If NULL, use segdata_obs
                          data_valid_loo = NULL, # if you want to use another dataset than the calibration one to calculate your model LOO value. Careful: values are not scaled (not implemented) so they must be scaled a priori, by first removing all the lines that have an NA in any of predictors columns
-                         list_knots = NULL, # xt argument in s() for covariates neither in no_by nor in no_by2
                          ncores = NULL,
                          outfile = "logs.txt",
                          first_try = F, # if you want to pre-select the number of best models (based on AIC) to use before running LOO, so that computation is fast. Just define here the number of best models to select if so.
                          first_try_AIC = F, # same but based on AIC difference compared to the best model: define here the maximum difference in AIC that you allow to select models that will run through the LOO.
-                         by_complexity = NULL, # if by_te, is the complexity of spline_by
-                         by_te = F, # to use te(predictors, spline_by) for each predictor no included in no_by
-                         use_ti = F, # if by_te, you can use here ti(predictors, spline_by) and add to the model ti(spline_by)
-                         all_in_te = F, # if you want to put all predictors in a single te(). Usually not more than 3 covariates possible.
-                         list_knots2 = NULL, # xt argument in s() for covariates in no_by2
-                         splines_by = NULL, # can be a factor or numeric, to fit te(predictors, spline_by) if by_te = T, or fitting s(predictors, spline_by) otherwise
-                         no_by = NULL, # predictors that should be used alone - i.e. without spline_by interaction
-                         no_by2 = NULL, # predictors that should be used only with 1 interaction - not too - in the case all_in_te = T
-                         month_spline_bs  = F, # if you want to add a spline for month, using bs = cc
                          likelihood = "negbin",
-                         fit_models = T, # if you want to return the list of models to fit before to actually fit them, set fit_models = F
-                         verbose = FALSE)
+                         fit_models = T # if you want to return the list of models to fit before to actually fit them, set fit_models = F)
+)
 {
   tab = T
   weighted = FALSE
   parallel = T
+  verbose <- F
 
   rescale2 <- function (ynew, y = NULL)
   {
@@ -304,16 +298,16 @@ run_all_DSM <- function (segdata_obs,
     return(out)
   }
 
-  assert_that(is.logical(use_loo))
-  assert_that(is.logical(verbose))
-  segdata_obs <- segdata_obs %>% units::drop_units()
+  # assert_that(is.logical(use_loo))
+  # assert_that(is.logical(verbose))
+  segdata_obs <- segdata_obs %>% units::drop_units() %>% st_drop_geometry()
   knots <- soap$knots
   # xt <- soap$xt
-  bnd <- soap$xt
+  bnd <- soap$bnd
 
-  if (is.null(by_complexity)) {
-    by_complexity <- complexity
-  }
+  # if (is.null(by_complexity)) {
+  #   by_complexity <- complexity
+  # }
 
   segdata_obs <- as.data.frame(segdata_obs)
 
@@ -335,213 +329,224 @@ run_all_DSM <- function (segdata_obs,
     return(tab_model)
   }
 
-  for (p in c(predictors, unique(unlist(splines_by)))) {
-    if (!is.null(p) & !is.na(p)) {
+  for (p in predictors) {
+    # if (!is.null(p) & !is.na(p)) {
       NAs <- which(is.na(segdata_obs %>%
                            pull(p)))
       if (length(NAs) > 0) {
         cat(length(NAs), "removed for", p, "\n")
         segdata_obs <- segdata_obs[-NAs, ]
       }
-    }
+    # }
   }
   cat(nrow(segdata_obs), "data remained\n")
 
-  if (!is.null(splines_by) & (!by_te & !use_ti)) {
-    assertthat::assert_that(is.character(splines_by))
-    assertthat::assert_that(segdata_obs %has_name% splines_by)
-    if (!by_te) {
-      list_is_splines_by <- lapply(splines_by, function(x) {
-        is.factor(segdata_obs %>%
-                    pull(get(x)))
-      })
-      df_is_splines_by <- do.call(rbind, list_is_splines_by)
-      assertthat::assert_that(all(df_is_splines_by[, 1] ==
-                                    TRUE), msg = "element of splines_by is not a factor")
-    }
-    if (all(levels(segdata_obs[, splines_by]) %in% segdata_obs[,
-                                                               splines_by]) == FALSE) {
-      cli::cli_alert_warning("One or multiple levels of {.val splines_by} are empty, consider relevel factor of {.val splines_by} : \n \t {.code segdata_obs$session <- droplevels(segdata_obs$session)}")
-    }
-  }
-  if (!is.null(spatial_options$by)) {
-    assertthat::assert_that(is.character(spatial_options$by))
-    assertthat::assert_that(segdata_obs %has_name% spatial_options$by)
-    list_is_spatial_by <- lapply(spatial_options$by, function(x) {
-      is.factor(segdata_obs[, x])
-    })
-    df_is_spatial_by <- do.call(rbind, list_is_spatial_by)
-    assertthat::assert_that(all(df_is_spatial_by[, 1] ==
-                                  TRUE), msg = "element of spatial_options$by is not a factor")
-    if (all(levels(segdata_obs[, spatial_options$by]) %in%
-            segdata_obs[, spatial_options$by]) == FALSE) {
-      cli::cli_alert_warning("One or multiple levels of {.val spatial_options$by} are empty, consider relevel factor of {.val spatial_options$by} : \n \t {.code segdata_obs$session <- droplevels(segdata_obs$session)}")
-    }
-  }
+  # if (!is.null(splines_by) & (!by_te & !use_ti)) {
+  #   assertthat::assert_that(is.character(splines_by))
+  #   assertthat::assert_that(segdata_obs %has_name% splines_by)
+  #   if (!by_te) {
+  #     list_is_splines_by <- lapply(splines_by, function(x) {
+  #       is.factor(segdata_obs %>%
+  #                   pull(get(x)))
+  #     })
+  #     df_is_splines_by <- do.call(rbind, list_is_splines_by)
+  #     assertthat::assert_that(all(df_is_splines_by[, 1] ==
+  #                                   TRUE), msg = "element of splines_by is not a factor")
+  #   }
+  #   if (all(levels(segdata_obs[, splines_by]) %in% segdata_obs[,
+  #                                                              splines_by]) == FALSE) {
+  #     cli::cli_alert_warning("One or multiple levels of {.val splines_by} are empty, consider relevel factor of {.val splines_by} : \n \t {.code segdata_obs$session <- droplevels(segdata_obs$session)}")
+  #   }
+  # }
+  # if (!is.null(spatial_options$by)) {
+  #   assertthat::assert_that(is.character(spatial_options$by))
+  #   assertthat::assert_that(segdata_obs %has_name% spatial_options$by)
+  #   list_is_spatial_by <- lapply(spatial_options$by, function(x) {
+  #     is.factor(segdata_obs[, x])
+  #   })
+  #   df_is_spatial_by <- do.call(rbind, list_is_spatial_by)
+  #   assertthat::assert_that(all(df_is_spatial_by[, 1] ==
+  #                                 TRUE), msg = "element of spatial_options$by is not a factor")
+  #   if (all(levels(segdata_obs[, spatial_options$by]) %in%
+  #           segdata_obs[, spatial_options$by]) == FALSE) {
+  #     cli::cli_alert_warning("One or multiple levels of {.val spatial_options$by} are empty, consider relevel factor of {.val spatial_options$by} : \n \t {.code segdata_obs$session <- droplevels(segdata_obs$session)}")
+  #   }
+  # }
   assertthat::assert_that(segdata_obs %has_name% predictors)
   X <- segdata_obs
-  if (all(is.null(splines_by))) {
-    smoothers <- paste("s(", predictors, ", k = ", complexity,
-                       ifelse(!is.null(splines_bs) & !is.na(splines_bs),
-                              paste0(", bs = '", splines_bs, "'"),
-                              ""),
-                       ")", sep = "")
-  } else {
-    if ((length(splines_bs) - 1) != ifelse(is.list(splines_by), length(splines_by[[1]]), length(splines_by))) {
-      cat("WARNING: Check that splines_bs and splines_by are appropriate: splines_bs should have a length = length(splines_by) + 1.\n")
-    }
+  # if (all(is.null(splines_by))) {
+  #   smoothers <- paste("s(", predictors, ", k = ", complexity,
+  #                      ifelse(!is.null(bs) & !is.na(bs),
+  #                             paste0(", bs = '", bs, "'"),
+  #                             ""),
+  #                      ")", sep = "")
+  # } else {
+  #   if ((length(bs) - 1) != ifelse(is.list(splines_by), length(splines_by[[1]]), length(splines_by))) {
+  #     cat("WARNING: Check that bs and splines_by are appropriate: bs should have a length = length(splines_by) + 1.\n")
+  #   }
+  #
+  #   smoothers <- do.call("c",
+  #                        map(predictors, function(p) {
+  #                          if (by_te & !use_ti) {
+  #                            if (p %in% no_by) {
+  #                              return(paste("s(", p, ", k = ", complexity,
+  #                                           ifelse(all(!is.null(bs)) & all(!is.na(bs)),
+  #                                                  paste0(", bs = '", bs[1], "'"),
+  #                                                  ""), ")", sep = ""))
+  #                            } else if (p %in% no_by2) {
+  #                              return(paste(do.call("c", map(splines_by, function(s) {
+  #                                paste("te(", p, ", ", paste(s[1], collapse = ", "), ", k = c(", complexity, ", ",
+  #                                      paste(rep(by_complexity, length(s[1])), collapse = ", "),
+  #                                      ")",
+  #                                      ifelse(all(!is.null(bs)) & all(!is.na(bs)),
+  #                                             paste0(", bs = c(", paste(paste0("'", bs[1:2], "'"), collapse = ", "), ")"),
+  #                                             ""),
+  #                                      ifelse(!is.null(list_knots2), paste0(", xt = ", list_knots2), ""),
+  #                                      ")", sep = "")
+  #                              })), collapse = " + "))
+  #                            } else {
+  #                              return(paste(do.call("c", map(splines_by, function(s) {
+  #                                paste("te(", p, ", ", paste(s, collapse = ", "), ", k = c(", complexity, ", ", paste(rep(by_complexity, length(s)), collapse = ", "),
+  #                                      ")",
+  #                                      ifelse(all(!is.null(bs)) & all(!is.na(bs)),
+  #                                             paste0(", bs = c(", paste(paste0("'", bs, "'"), collapse = ", "), ")"),
+  #                                             ""),
+  #                                      ifelse(!is.null(list_knots), paste0(", xt = ", list_knots), ""),
+  #                                      ")", sep = "")
+  #                              })), collapse = " + "))
+  #                            }
+  #                          } else if (use_ti) {
+  #                            if (p %in% no_by | p %in% no_by2) {
+  #                              return(paste(paste("s(", p, ", k = ", complexity,
+  #                                                 ifelse(all(!is.null(bs)) & all(!is.na(bs)),
+  #                                                        paste0(", bs = '", bs[1], "'"),
+  #                                                        ""), ")", sep = "")))
+  #
+  #                            } else {
+  #                              return(paste(paste("ti(", p, ", k = ", complexity,
+  #                                                 ifelse(all(!is.null(bs)) & all(!is.na(bs)),
+  #                                                        paste0(", bs = '", bs[1], "'"),
+  #                                                        ""), ")", sep = ""),
+  #                                           " + ",
+  #                                           paste(do.call("c", map(1:length(splines_by), function(s) {
+  #                                             paste("ti(", p, ", ",
+  #                                                   splines_by[s], ", k = c(", by_complexity, ", ", by_complexity, ")",
+  #                                                   ", bs = c('", bs[1], "',", " '", bs[s + 1], "'))", sep = "")
+  #                                           })), collapse = " + ")))
+  #                            }
+  #                          } else {
+  #                            if (p %in% no_by | p %in% no_by2) {
+  #                              return(paste(paste("s(", p, ", k = ", complexity,
+  #                                                 ifelse(all(!is.null(bs)) & all(!is.na(bs)),
+  #                                                        paste0(", bs = '", bs[1], "'"),
+  #                                                        ""), ")", sep = "")))
+  #
+  #                            } else {
+  #                              return(paste(paste("s(", p, ", k = ", complexity,
+  #                                                 ifelse(all(!is.null(bs)) & all(!is.na(bs)),
+  #                                                        paste0(", bs = '", bs[1], "'"),
+  #                                                        ""), ")", sep = ""),
+  #                                           " + ",
+  #                                           paste(do.call("c", map(1:length(splines_by), function(s) {
+  #                                             paste("s(", p, ", ", ifelse(bs[s + 1] != "fs", "by = ", ""),
+  #                                                   splines_by[s], ", k = ", by_complexity,
+  #                                                   ", bs = '", bs[s + 1], "')", sep = "")
+  #                                           })), collapse = " + ")))
+  #                            }
+  #                          }
+  #                        }))
+  # }
+  smoothers <- smoother(variable = predictors,
+                        bs = bs,
+                        complexity = complexity)
 
-    smoothers <- do.call("c",
-                         map(predictors, function(p) {
-                           if (by_te & !use_ti) {
-                             if (p %in% no_by) {
-                               return(paste("s(", p, ", k = ", complexity,
-                                            ifelse(all(!is.null(splines_bs)) & all(!is.na(splines_bs)),
-                                                   paste0(", bs = '", splines_bs[1], "'"),
-                                                   ""), ")", sep = ""))
-                             } else if (p %in% no_by2) {
-                               return(paste(do.call("c", map(splines_by, function(s) {
-                                 paste("te(", p, ", ", paste(s[1], collapse = ", "), ", k = c(", complexity, ", ",
-                                       paste(rep(by_complexity, length(s[1])), collapse = ", "),
-                                       ")",
-                                       ifelse(all(!is.null(splines_bs)) & all(!is.na(splines_bs)),
-                                              paste0(", bs = c(", paste(paste0("'", splines_bs[1:2], "'"), collapse = ", "), ")"),
-                                              ""),
-                                       ifelse(!is.null(list_knots2), paste0(", xt = ", list_knots2), ""),
-                                       ")", sep = "")
-                               })), collapse = " + "))
-                             } else {
-                               return(paste(do.call("c", map(splines_by, function(s) {
-                                 paste("te(", p, ", ", paste(s, collapse = ", "), ", k = c(", complexity, ", ", paste(rep(by_complexity, length(s)), collapse = ", "),
-                                       ")",
-                                       ifelse(all(!is.null(splines_bs)) & all(!is.na(splines_bs)),
-                                              paste0(", bs = c(", paste(paste0("'", splines_bs, "'"), collapse = ", "), ")"),
-                                              ""),
-                                       ifelse(!is.null(list_knots), paste0(", xt = ", list_knots), ""),
-                                       ")", sep = "")
-                               })), collapse = " + "))
-                             }
-                           } else if (use_ti) {
-                             if (p %in% no_by | p %in% no_by2) {
-                               return(paste(paste("s(", p, ", k = ", complexity,
-                                                  ifelse(all(!is.null(splines_bs)) & all(!is.na(splines_bs)),
-                                                         paste0(", bs = '", splines_bs[1], "'"),
-                                                         ""), ")", sep = "")))
+  # if (by_te | use_ti) {
+  #   segdata_obs[, c(predictors#, "lon", "lat"
+  #   )] <- apply(segdata_obs[,
+  #                           c(c(predictors
+  #                             # , "lon", "lat"
+  #                           )], 2, rescale2)
+  # } else {
+  segdata_obs[, c(c(predictors)#, "lon", "lat"
+  )] <- apply(segdata_obs[,
+                          c(c(predictors)
+                            # , "lon", "lat"
+                          )], 2, rescale2)
+  # }
 
-                             } else {
-                               return(paste(paste("ti(", p, ", k = ", complexity,
-                                                  ifelse(all(!is.null(splines_bs)) & all(!is.na(splines_bs)),
-                                                         paste0(", bs = '", splines_bs[1], "'"),
-                                                         ""), ")", sep = ""),
-                                            " + ",
-                                            paste(do.call("c", map(1:length(splines_by), function(s) {
-                                              paste("ti(", p, ", ",
-                                                    splines_by[s], ", k = c(", by_complexity, ", ", by_complexity, ")",
-                                                    ", bs = c('", splines_bs[1], "',", " '", splines_bs[s + 1], "'))", sep = "")
-                                            })), collapse = " + ")))
-                             }
-                           } else {
-                             if (p %in% no_by | p %in% no_by2) {
-                               return(paste(paste("s(", p, ", k = ", complexity,
-                                                  ifelse(all(!is.null(splines_bs)) & all(!is.na(splines_bs)),
-                                                         paste0(", bs = '", splines_bs[1], "'"),
-                                                         ""), ")", sep = "")))
+  # if (is.null(soap$xt) && is.null(soap$knots)) {
+  #   if (is.null(spatial_options$by) && is.na(spatial_options$complexity)) {
+  #     intercept <- "~ 1"
+  #   }
+  #   else if (!is.null(spatial_options$by)) {
+  #     intercept <- paste0("~ te(X, Y, bs = c('cs', 'cs'), by = ",
+  #                         spatial_options$by, ", k = ", spatial_options$complexity,
+  #                         ")")
+  #   }
+  #   else {
+  #     intercept <- paste0("~ te(X, Y, bs = c('cs', 'cs'), k = ",
+  #                         spatial_options$complexity, ")")
+  #   }
+  #
+  # } else {
+  #   if (is.null(spatial_options$by) && is.na(spatial_options$complexity)) {
+  #     # intercept <- "~ 1"
+  #     intercept <- paste0("~ 1 + s(X, Y, bs = 'so', xt = list(bnd = bnd))")
+  #   }
+  #   else if (!is.null(spatial_options$by)) {
+  #     intercept <- paste0("~ s(X, Y, bs = 'so', by = ",
+  #                         spatial_options$by, ", k = ", spatial_options$complexity,
+  #                         ", xt = list(bnd = bnd))")
+  #   }
+  #   else {
+  #     intercept <- paste0("~ s(X, Y, bs = 'so', k = ",
+  #                         spatial_options$complexity, ", xt = list(bnd = bnd))")
+  #   }
+  # }
+  intercept <- paste0("~ 1",
+                      ifelse(all(!is.null(bnd)),
+                             paste0(" + s(", soap$coordinates[1], ", ", soap$coordinates[2], ", bs = 'so', xt = list(bnd = bnd))"),
+                             ""),
+                      ifelse(!is.null(spline_to_add),
+                             paste0(" + ", spline_to_add),
+                             "")
+                      )
 
-                             } else {
-                               return(paste(paste("s(", p, ", k = ", complexity,
-                                                  ifelse(all(!is.null(splines_bs)) & all(!is.na(splines_bs)),
-                                                         paste0(", bs = '", splines_bs[1], "'"),
-                                                         ""), ")", sep = ""),
-                                            " + ",
-                                            paste(do.call("c", map(1:length(splines_by), function(s) {
-                                              paste("s(", p, ", ", ifelse(splines_bs[s + 1] != "fs", "by = ", ""),
-                                                    splines_by[s], ", k = ", by_complexity,
-                                                    ", bs = '", splines_bs[s + 1], "')", sep = "")
-                                            })), collapse = " + ")))
-                             }
-                           }
-                         }))
-  }
+  # if (!is.null(month_spline_bs) & !is.na(month_spline_bs) & month_spline_bs != F) {
+  #   assert_that(is.numeric(segdata_obs$month))
+  #   intercept <- paste0(intercept, " + s(month, bs = 'cc'", ifelse(is.numeric(month_spline_bs),
+  #                                                                  paste0(", k = ", month_spline_bs),
+  #                                                                  ""), ", xt = list(range = c(0.5, 12.5)))")
+  # }
 
-  if (by_te | use_ti) {
-    segdata_obs[, c(c(predictors, unique(na.omit(unlist(splines_by))))#, "lon", "lat"
-    )] <- apply(segdata_obs[,
-                            c(c(predictors, unique(na.omit(unlist(splines_by))))
-                              # , "lon", "lat"
-                            )], 2, rescale2)
-  } else {
-    segdata_obs[, c(c(predictors)#, "lon", "lat"
-    )] <- apply(segdata_obs[,
-                            c(c(predictors)
-                              # , "lon", "lat"
-                            )], 2, rescale2)
-  }
+  # if (use_ti) {
+  #   intercept <- paste0(intercept, " + ti(", splines_by, ", bs = '", bs[2], "'", ", k = ", complexity, ")")
+  # }
 
-  if (is.null(soap$xt) && is.null(soap$knots)) {
-    if (is.null(spatial_options$by) && is.na(spatial_options$complexity)) {
-      intercept <- "~ 1"
-    }
-    else if (!is.null(spatial_options$by)) {
-      intercept <- paste0("~ te(X, Y, bs = c('cs', 'cs'), by = ",
-                          spatial_options$by, ", k = ", spatial_options$complexity,
-                          ")")
-    }
-    else {
-      intercept <- paste0("~ te(X, Y, bs = c('cs', 'cs'), k = ",
-                          spatial_options$complexity, ")")
-    }
+  # if (!is.null(random)) {
+  #   if (!all(random %in% names(segdata_obs))) {
+  #     stop("Check random effect: no matching column in table \"segdata_obs\"")
+  #   }
+  #   else {
+  #     for (kk in 1:length(random)) {
+  #       if (!is.factor(segdata_obs %>%
+  #                      pull(random[kk]))) {
+  #         cat("Transform", random[kk], "to factor\n")
+  #         segdata_obs[, random[kk]] <- factor(c(segdata_obs[,
+  #                                                           random[kk]])[[1]], levels = c(unique(segdata_obs[,
+  #                                                                                                            random[kk]]), "new_level"))
+  #         X[, random[kk]] <- factor(c(X[, random[kk]])[[1]],
+  #                                   levels = c(unique(X[, random[kk]][[1]]), "new_level"))
+  #       }
+  #       intercept <- paste(intercept, " + s(", random[kk],
+  #                          ", bs = 're')", sep = "")
+  #     }
+  #   }
+  # }
 
-  } else {
-    if (is.null(spatial_options$by) && is.na(spatial_options$complexity)) {
-      # intercept <- "~ 1"
-      intercept <- paste0("~ 1 + s(X, Y, bs = 'so', xt = list(bnd = bnd))")
-    }
-    else if (!is.null(spatial_options$by)) {
-      intercept <- paste0("~ s(X, Y, bs = 'so', by = ",
-                          spatial_options$by, ", k = ", spatial_options$complexity,
-                          ", xt = list(bnd = bnd))")
-    }
-    else {
-      intercept <- paste0("~ s(X, Y, bs = 'so', k = ",
-                          spatial_options$complexity, ", xt = list(bnd = bnd))")
-    }
-  }
-
-  if (!is.null(month_spline_bs) & !is.na(month_spline_bs) & month_spline_bs != F) {
-    assert_that(is.numeric(segdata_obs$month))
-    intercept <- paste0(intercept, " + s(month, bs = 'cc'", ifelse(is.numeric(month_spline_bs),
-                                                                   paste0(", k = ", month_spline_bs),
-                                                                   ""), ", xt = list(range = c(0.5, 12.5)))")
-  }
-
-  if (use_ti) {
-    intercept <- paste0(intercept, " + ti(", splines_by, ", bs = '", splines_bs[2], "'", ", k = ", complexity, ")")
-  }
-
-  if (!is.null(random)) {
-    if (!all(random %in% names(segdata_obs))) {
-      stop("Check random effect: no matching column in table \"segdata_obs\"")
-    }
-    else {
-      for (kk in 1:length(random)) {
-        if (!is.factor(segdata_obs %>%
-                       pull(random[kk]))) {
-          cat("Transform", random[kk], "to factor\n")
-          segdata_obs[, random[kk]] <- factor(c(segdata_obs[,
-                                                            random[kk]])[[1]], levels = c(unique(segdata_obs[,
-                                                                                                             random[kk]]), "new_level"))
-          X[, random[kk]] <- factor(c(X[, random[kk]])[[1]],
-                                    levels = c(unique(X[, random[kk]][[1]]), "new_level"))
-        }
-        intercept <- paste(intercept, " + s(", random[kk],
-                           ", bs = 're')", sep = "")
-      }
-    }
-  }
-
-  if (all(!is.null(spline_to_add))) {
-    intercept <- paste0(intercept, " + ", spline_to_add)
-  }
+  # if (all(!is.null(spline_to_add))) {
+  #   intercept <- paste0(intercept, " + ", spline_to_add)
+  # }
 
   # all_x <- lapply(1:nb_max_pred, combn, x = length(predictors))
   # all_x <- list(all_x[[1]],
@@ -766,9 +771,9 @@ run_all_DSM <- function (segdata_obs,
                       }
                     }))
 
-    cat(length(which(remx >= max_cor)), "models removed due to correlated variables\n")
+    cat(length(which(remx >= max_correlation)), "models removed due to correlated variables\n")
 
-    list_models_to_do <- list_models_to_do[remx <= max_cor]
+    list_models_to_do <- list_models_to_do[remx <= max_correlation]
 
     all_x <- list(do.call("cbind",
                           map(list_models_to_do, function(m) {
@@ -800,18 +805,18 @@ run_all_DSM <- function (segdata_obs,
     r <- r
     intercept <- intercept
     smoothers <- smoothers
-    all_in_te <- all_in_te
+    all_in_te <- F
     predictors <- predictors
-    splines_bs <- splines_bs
+    bs <- bs
     complexity <- complexity
     return(do.call("c",
                    (foreach(i = 1:ncol(mat),
-                            .noexport = ls()[!(ls() %in% c("intercept", "r", "smoothers", "mat", "all_in_te", "predictors", "splines_bs", "complexity"))],
+                            .noexport = ls()[!(ls() %in% c("intercept", "r", "smoothers", "mat", "all_in_te", "predictors", "bs", "complexity"))],
                             .packages = "dplyr"
                    ) %dopar% {
                      return(paste(paste(r, intercept, sep = ""), paste(ifelse(all_in_te,
                                                                               paste0(ifelse(length(predictors[mat[, i]]) > 1, "te(", "s("), paste(predictors[mat[, i]], collapse = ", "), ", bs = c(",
-                                                                                     paste(paste0("'", rep(splines_bs[1], length(predictors[mat[, i]])), "'"), collapse = ", "),
+                                                                                     paste(paste0("'", rep(bs[1], length(predictors[mat[, i]])), "'"), collapse = ", "),
                                                                                      "), k = c(",
                                                                                      paste(rep(complexity, length(predictors[mat[, i]])), collapse = ", "), "))"),
                                                                               paste(smoothers[mat[, i]], collapse = " + ")), collapse = " + "), sep = " + "))
@@ -821,38 +826,41 @@ run_all_DSM <- function (segdata_obs,
 
   if (is.null(list_models_to_do)) {
     cat(length(all_mods), "models for", length(rm_combn), "correlations\n")
-    cat(length(which(rm_combn > max_cor)), "models removed due to correlated variables\n")
-    all_mods <- all_mods[rm_combn <= max_cor]
+    cat(length(which(rm_combn > max_correlation)), "models removed due to correlated variables\n")
+    all_mods <- all_mods[rm_combn <= max_correlation]
 
   }
 
   stopCluster(clust)
   gc()
 
-  # all_mods <- all_mods[which(rm_combn < max_cor)] ## used previously
+  # all_mods <- all_mods[which(rm_combn < max_correlation)] ## used previously
 
-  all_mods <- paste0(all_mods, "+ offset(I(log(", offset_effort, ")))")
+  all_mods <- paste0(all_mods, ifelse(!is.null(offset_effort),
+                                      "+ offset(I(log(", offset_effort, ")))",
+                                      ""))
 
-  if (weighted) {
-    covariable <- predictors
-    w <- lapply(all_x, function(tab) {
-      sapply(1:ncol(tab), function(j) {
-        make_cfact_2(calibration_data = segdata_obs,
-                     test_data = segdata_obs, var_name = covariable[tab[,
-                                                                        j]], percent = FALSE, near_by = TRUE)
-      })
-    })
-    w <- cbind(rep(1, nrow(segdata_obs)), do.call("cbind",
-                                                  w))
-    w <- w[, which(rm_combn < max_cor)]
-  } else {
-    w <- matrix(1, nrow = nrow(segdata_obs), ncol = #length(which(rm_combn <
-                  # max_cor))
-                  length(all_mods)
-    )
-  }
+  # if (weighted) {
+  #   covariable <- predictors
+  #   w <- lapply(all_x, function(tab) {
+  #     sapply(1:ncol(tab), function(j) {
+  #       make_cfact_2(calibration_data = segdata_obs,
+  #                    test_data = segdata_obs, var_name = covariable[tab[,
+  #                                                                       j]], percent = FALSE, near_by = TRUE)
+  #     })
+  #   })
+  #   w <- cbind(rep(1, nrow(segdata_obs)), do.call("cbind",
+  #                                                 w))
+  #   w <- w[, which(rm_combn < max_correlation)]
+  # } else {
+  #   w <- matrix(1, nrow = nrow(segdata_obs), ncol = #length(which(rm_combn <
+  #                 # max_correlation))
+  #                 length(all_mods)
+  #   )
+  # }
+
   my_dsm_fct <- function(x, tab = TRUE, segdata_obs, loo = FALSE, method,
-                         bnd = soap$xt, knots = soap$knots, verbose = F) {
+                         bnd = soap$bnd, knots = soap$knots, verbose = F) {
     if (verbose) {
       glue("\t\t* Fitting model with formula {x}\n")
     }
@@ -1733,6 +1741,5 @@ run_all_DSM <- function (segdata_obs,
     try(stopCluster(clust))
   }
   return(list(n_best = k, all_fits_binded = all_fits, best_models = best_std, all_models_tried = all_mods,
-              best_models4plotting = best, splines_by = splines_by,
-              random = random))
+              best_models4plotting = best))
 }

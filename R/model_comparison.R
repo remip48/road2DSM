@@ -227,7 +227,12 @@ model_comparison <- function(run_models, # output from run_all_DSM
   for (i in 1:length(run_models$best_models)) {
     chunk_modeli <- quote({
       summary(run_models$best_models[[i]])
-      gratia::draw(run_models$best_models4plotting[[i]], rug = F)
+      if (str_detect(as.character(run_models$best_models[[i]]$formula)[3], fixed("bs = \"so\", xt = list(bnd = bnd)"))) {
+        plot(run_models$best_models[[i]], select = 1)
+        gratia::draw(run_models$best_models4plotting[[i]], rug = F, select = -1)
+      } else {
+        gratia::draw(run_models$best_models4plotting[[i]], rug = F)
+      }
       qq.gam(run_models$best_models4plotting[[i]], rep = 1000)
 
       cat("\n\n#### ASPE & Ratio of the number of observed", ifelse(str_detect(response, "group"), "groups", "individuals"),
