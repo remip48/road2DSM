@@ -91,16 +91,22 @@ if (!dir.exists(file.path(WorkDir, "prediction_grids"))) {
   dir.create(file.path(WorkDir, "prediction_grids"))
 }
 
+## load bathy and coastline
+bathy <- terra::raster(bathy_raster_file)
+coatline <- read_sf(coastline_sf_file)
+
 extract_grid(grid = grid5km,
              variable = c("SST", "EKE", "NPPV"),
              file_set_directory = file.path(WorkDir, "NC_files_directory"),
              writing_directory = file.path(WorkDir, "prediction_grids"),
+             rasters = list(bathy = bathy),
+             distance_to = list(distance_to_coast = coatline),
              dates = list_dates,
-             version_file = "20250901", # this will be written in the name of prediction grids
              n_cores = 5,
              outfile = file.path(WorkDir, "log.txt")
 )
 
+########################
 ### OPTIONAL STEP!!! Let's say you are also interested in the SDspace but when considering a larger resolution than the nc files (let's say 2x2km): now you want the SDspace considering cells of 5 km to get more mesoscale patterns:
 # this step is definitevly not necessary but interesting for exploration of data.
 if (!dir.exists(file.path(WorkDir, "prediction_grids", "with_upscale_SDspace", "file_set_1"))) {
@@ -115,24 +121,14 @@ upscale_SDspace(file_directory = file.path(WorkDir, "prediction_grids"),
 # to reproduce exactly the folder structure created by extract_nc, we need to have the corresponding sf grid of file_set_1 in the parent directory:
 write_sf(grid5km,
          file.path(WorkDir, "prediction_grids", "with_upscale_SDspace", "file_set_1.shp"))
+########################
 
-### If you want to extract additional dynamic variables than those from the nc files: these should be added in the respective files of prediction grids (either
-# in file.path(WorkDir, "prediction_grids") or in file.path(WorkDir, "prediction_grids", "with_upscale_SDspace", "file_set_1.shp") if upscale_SDspace wan run.
-# If you want static variables in addition, please see below:
-
-### In any case, if we want to predict later, we need to save a "static" prediction grid in the folder containing all the prediction grids that will be used.
 # If we used upscale_SDspace:
 predgrid_directory <- file.path(WorkDir, "prediction_grids", "with_upscale_SDspace", "file_set_1")
+file_set_directory <- file.path(WorkDir, "prediction_grids", "with_upscale_SDspace")
 # Otherwise:
 predgrid_directory <- file.path(WorkDir, "prediction_grids")
-
-# If you want additional static variables (e.g. bathymetry, slope, distance to coast), you can calculate it now on the sf prediction grid: example only for bathy
-grid5km <- grid5km %>%
-  dplyr::mutate(bathy = terra::extract(BathyRASTER, ., fun = mean, na.rm = TRUE)[, 2])
-
-### and then, important, even if you did not calculate any static variables on grid5km, save the grid in the same folder than all the predictin grids:
-write_sf(grid5km,
-         file.path(predgrid_directory, "20250901_static_grid.shp"))
+file_set_directory <- file.path(WorkDir, "NC_files_directory")
 
 ### Now we can extract all the variables on the effort:
 # first we create a buffer around the segments
@@ -141,20 +137,12 @@ effort <- segments %>%
   st_buffer(units::set_units(2.5, km))
 
 ### and now we extract:
-# in case you have run upscale_SDspace
 effort_extracted <- extract_effort(effort = effort,
                                    variable = c("SST", "EKE", "NPPV"),
+                                   rasters = list(bathy = bathy),
+                                   distance_to = list(distance_to_coast = coatline),
                                    n_cores = 10,
-                                   file_set_directory = file.path(WorkDir, "prediction_grids", "with_upscale_SDspace")
-                                   )
-
-# otherwise:
-effort_extracted <- extract_effort(effort = effort,
-                                   variable = c("SST", "EKE", "NPPV"),
-                                   n_cores = 10,
-                                   file_set_directory = file.path(WorkDir, "NC_files_directory"))
-
-### if you have other variables to extract than those in the nc files (e.g. bathymetry, slope, or distance to coast), you can do it now on the effort
+                                   file_set_directory = file_set_directory)
 
 ### now that all the files are ready, we can fit models:
 calibration_data <- effort_extracted %>%
@@ -172,8 +160,6 @@ run_models <- run_all_DSM(segdata_obs = calibration_data,
                           complexity = 10,
                           use_loo = T,
                           intermediate_model_save = file.path(WorkDir, "Model/models.rds"),
-                          spatial_options = list(by = "year",
-                                                 complexity = 10),
                           k = 5, # number of best models to return
                           offset_effort = "effort_km2",
                           load_saved_models = F
@@ -195,7 +181,6 @@ model_comparison(run_models = run_models,
                  output_file = paste0("2025-09-01", "_model_comparison"), # without extension, will be the name of html file
                  log1p_trans = NULL,
                  grid_folder = predgrid_directory, # prediction grids
-                 static_grid = "20250901_static_grid.shp",
                  prediction_folder = file.path(WorkDir, "predictions"), # folder to store the model predictions
                  correct_bias = T,
                  save_results_bias_corrected = F,
@@ -234,7 +219,6 @@ gap_analysis(seg_data = calibration_data, # segments used for run_all_DSM. Shoul
              version_preds = "2025-09-01",
              output_file = paste0("2025-09-01", "_gap_analysis"), # without extension, will be the name of html file
              grid_folder = predgrid_directory,
-             static_grid = "20250901_static_grid.shp",
              save_results_dsmextra = file.path(WorkDir, "gap_analysis"), # put NULL if you dont want to save results. Path where to save results.
              filter_year_month_not_in = "0000-00", # year and month that should not be used for gap_analysis
              n_cores = NULL,

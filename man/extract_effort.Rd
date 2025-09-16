@@ -7,6 +7,8 @@
 extract_effort(
   effort,
   variable,
+  rasters = list(bathy = NULL),
+  distance_to = list(distance_to_coast = NULL),
   file_set_directory,
   try_to_combine_filetsets = T,
   n_cores = NULL,

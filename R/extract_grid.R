@@ -17,12 +17,21 @@
 extract_grid <- function(grid,
                          variable,
                          file_set_directory,
+                         rasters = list(bathy = NULL), # should be terra object
+                         distance_to = list(distance_to_coast = NULL), # should be sf object
                          writing_directory,
-                         version_file = as.character(lubridate::today()),
+                         # version_file = as.character(lubridate::today()),
                          try_to_combine_filetsets = T,
                          dates,
                          n_cores = NULL,
                          outfile = "log.txt") {
+
+  version_file <- "prediction"
+  today <- version_file
+
+  if (length(list.files(writing_directory)) > 0) {
+    warning(paste0(writing_directory, " contains already files. Be careful that only the currently created grids must be in the directory used to predict in the function model_comparison (used for prediction as well).\n"))
+  } # (version_file = ", version_file, ")
 
   cat("Files will be written as", paste0(version_file, "_grid_DATE.rds"), "\n")
 
@@ -31,6 +40,36 @@ extract_grid <- function(grid,
   } else {
     cat("File_set won't be combined together before extraction. Might be longer if grids are actually similar.\n")
   }
+
+  static <- grid
+
+  for (i in 1:length(rasters)) {
+    if (any(!is.null(rasters[[i]]))) {
+      static <- static %>%
+        st_transform(crs = terra::crs(rasters[[i]])) %>%
+        dplyr::mutate(!!names(rasters)[i] := terra::extract(rasters[[i]], ., fun = mean, na.rm = TRUE)[, 2])
+    }
+  }
+
+  for (i in 1:length(distance_to)) {
+    if (any(!is.null(distance_to[[i]]))) {
+      static <- static %>%
+        st_transform(crs = st_crs(grid)) %>%
+        dplyr::mutate(!!names(distance_to)[i] := c(units::drop_units(st_distance(st_centroid(.),
+                                                                                 distance_to[[i]] %>%
+                                                                                   st_transform(crs = st_crs(grid)) %>%
+                                                                                   group_by() %>%
+                                                                                   dplyr::summarise(do_union = F) %>%
+                                                                                   st_cast()))))
+    }
+  }
+
+  write_sf(static %>%
+            st_cast(),
+          paste0(writing_directory, "/", today, "_static_grid.shp"))
+
+  cat("Static grid saved under", paste0(writing_directory, "/", today, "_static_grid.shp"), "\n")
+
   # pkg::fun(sf)
   # pkg::fun(dplyr)
   # pkg::fun(raster)
@@ -56,8 +95,6 @@ extract_grid <- function(grid,
     n_cores <- detectCores() * 3 / 4
     cat("Parallel processing with", n_cores, "cores will be used.\n")
   }
-
-  today <- version_file
 
   cl <- makeCluster(n_cores, outfile = outfile
   )

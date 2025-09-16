@@ -28,13 +28,15 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
                          version_preds = as.character(lubridate::today()),
                          output_file = paste0(version_preds, "_gap_analysis"), # without extension, will be the name of html file
                          grid_folder,
-                         static_grid, # grid with variables (static) that were not included in the extract_grids. Must have geometry, and use the exact same grid that the one used for extract_grid.
+                         # static_grid, # grid with variables (static) that were not included in the extract_grids. Must have geometry, and use the exact same grid that the one used for extract_grid.
                          save_results_dsmextra = getwd(), # put NULL if you dont want to save results. Path where to save results.
                          study_area = NULL, # in case you want to predict only on a part of your prediction grid
                          filter_year_month_not_in = "0000-00", # year and month that should not be used for prediction
                          run_all = F,
                          outfile = "log.txt",
                          n_cores = NULL) {
+
+  static_grid <- "prediction_static_grid.shp"
 
   if (is.null(grid_resolution)) {
     stop("Please provide a value c(res_x, res_y) for grid_resolution used")
@@ -137,7 +139,7 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
     as.data.frame()
 
   ls <- list.files(grid_folder)
-  ls <- ls[ls != static_grid]
+  ls <- ls[!str_detect(ls, fixed(static_grid)) & str_detect(ls, fixed("grid"))]
   ls <- do.call("c", lapply(ls, function(l) {
     date <- str_remove_all(dplyr::last(str_split_1(l, "_")), fixed(".rds"))
     if (any(str_detect(date, fixed(filter_year_month_not_in)))) {

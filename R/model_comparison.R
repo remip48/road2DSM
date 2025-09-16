@@ -44,7 +44,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
                                       output_file = paste0(version_preds, "_model_comparison"), # without extension, will be the name of html file
                                       log1p_trans = NULL,
                                       grid_folder,
-                                      static_grid, # grid with variables (static) that were not included in the extract_grids. Must have geometry, and use the exact same grid that the one used for extract_grid.
+                                      # static_grid, # grid with variables (static) that were not included in the extract_grids. Must have geometry, and use the exact same grid that the one used for extract_grid.
                                       prediction_folder,
                                       block_file = NULL, # add here the sf file containing your sub-blocks for your area if you want to use groupsizes as response (containing the column Name for the sub-names), otherwise let NULL
                                       data_file = NULL, # add here the intial GPS points to calculate group sizes if needed and print observations. Must contain the column AU for which groupsizes are averaged per AU, and the column Platform (aerial or ship).
@@ -69,6 +69,8 @@ model_comparison <- function(run_models, # output from run_all_DSM
                                       outfile = "log.txt",
                                       save_posterior_distribution = F,
                                       n_cores = NULL) {
+
+  static_grid <- "prediction_static_grid.shp"
 
   ## this function is adapted to the type of data of ITAW.
 
@@ -302,7 +304,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
     models <- run_models$best_models[to_runm]
 
     ls <- list.files(grid_folder)
-    ls <- ls[!str_detect(ls, static_grid)]
+    ls <- ls[!str_detect(ls, fixed(static_grid)) & str_detect(ls, "grid")]
     ls <- do.call("c", lapply(ls, function(l) {
       if (any(str_detect(l, fixed(paste0(as.character(unique(seg_data$year)),
                                          "-")))) &

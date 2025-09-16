@@ -42,7 +42,7 @@ backward_selection <- function(variable,
 
   seg_data_init <- seg_data %>%
     dplyr::select(all_of(c(covariates, offset_effort)), ppho, X, Y) %>%
-    drop_na() %>%
+    tidyr::drop_na() %>%
     as.data.frame()
 
   seg_data_scale <- seg_data_init
@@ -68,7 +68,7 @@ backward_selection <- function(variable,
 
   model <- paste0(response, " ~ 1 + ",
                   ifelse(all(!is.null(bnd)),
-                         paste0(" + s(", soap$coordinates[1], ", ", soap$coordinates[2], ", bs = 'so', xt = list(bnd = bnd))"),
+                         paste0("s(", soap$coordinates[1], ", ", soap$coordinates[2], ", bs = 'so', xt = list(bnd = bnd)) + "),
                          ""),
                   # paste(paste0("s(", covariates, ", bs = 'cs', k = 10)"), collapse = " + "),
                   paste(smoother(variable = covariates, bs = bs, complexity = complexity), collapse = " + "),
@@ -84,16 +84,16 @@ backward_selection <- function(variable,
   if (length(covariates) > treshold_discrete) {
     model_it <- mgcv::bam(as.formula(model),
                           method = "fREML",
-                          nthreads = detectCores() - 1,
+                          nthreads = parallel::detectCores() - 1,
                           discrete=T,
-                          family = nb(),
+                          family = mgcv::nb(),
                           knots = knots,
                           data = seg_data_scale
     )
   } else {
     model_it <- mgcv::gam(as.formula(model),
                           method = "REML",
-                          family = nb(),
+                          family = mgcv::nb(),
                           knots = knots,
                           data = seg_data_scale
     )
@@ -164,7 +164,7 @@ backward_selection <- function(variable,
 
       model <- paste0(response, " ~ 1 + ",
                       ifelse(all(!is.null(bnd)),
-                             paste0(" + s(", soap$coordinates[1], ", ", soap$coordinates[2], ", bs = 'so', xt = list(bnd = bnd))"),
+                             paste0("s(", soap$coordinates[1], ", ", soap$coordinates[2], ", bs = 'so', xt = list(bnd = bnd)) + "),
                              ""),
                       # paste(paste0("s(", covariates, ", bs = 'cs', k = 10)"), collapse = " + "),
                       paste(smoother(variable = covariates, bs = bs, complexity = complexity), collapse = " + "),
@@ -178,16 +178,16 @@ backward_selection <- function(variable,
       if (length(covariates) > treshold_discrete) {
         model_it <- mgcv::bam(as.formula(model),
                               method = "fREML",
-                              nthreads = detectCores() - 1,
+                              nthreads = parallel::detectCores() - 1,
                               discrete=T,
-                              family = nb(),
+                              family = mgcv::nb(),
                               knots = knots,
                               data = seg_data_scale
         )
       } else {
         model_it <- mgcv::gam(as.formula(model),
                               method = "REML",
-                              family = nb(),
+                              family = mgcv::nb(),
                               knots = knots,
                               data = seg_data_scale
         )
@@ -236,7 +236,7 @@ backward_selection <- function(variable,
 
     model <- paste0(response, " ~ 1 + ",
                     ifelse(all(!is.null(bnd)),
-                           paste0(" + s(", soap$coordinates[1], ", ", soap$coordinates[2], ", bs = 'so', xt = list(bnd = bnd))"),
+                           paste0("s(", soap$coordinates[1], ", ", soap$coordinates[2], ", bs = 'so', xt = list(bnd = bnd)) + "),
                            ""),
                     # paste(paste0("s(", covariates, ", bs = 'cs', k = 10)"), collapse = " + "),
                     paste(smoother(variable = covariates, bs = bs, complexity = complexity), collapse = " + "),
@@ -250,16 +250,16 @@ backward_selection <- function(variable,
     if (length(covariates) > treshold_discrete) {
       model_it <- mgcv::bam(as.formula(model),
                             method = "fREML",
-                            nthreads = detectCores() - 1,
+                            nthreads = parallel::detectCores() - 1,
                             discrete=T,
-                            family = nb(),
+                            family = mgcv::nb(),
                             knots = knots,
                             data = seg_data_scale
       )
     } else {
       model_it <- mgcv::gam(as.formula(model),
                             method = "REML",
-                            family = nb(),
+                            family = mgcv::nb(),
                             knots = knots,
                             data = seg_data_scale
       )
@@ -292,7 +292,7 @@ backward_selection <- function(variable,
 
   model_actual <- mgcv::gam(as.formula(model),
                             method = "REML",
-                            family = nb(),
+                            family = mgcv::nb(),
                             knots = knots,
                             data = seg_data_init)
 
@@ -321,3 +321,4 @@ backward_selection <- function(variable,
 
   return(final_file)
 }
+

@@ -41,6 +41,7 @@ Imports:
     sf,
     stars,
     stringr,
+    terra,
     tidyr,
     timeDate,
     units,

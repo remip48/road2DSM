@@ -14,6 +14,8 @@
 #' @examples
 extract_effort <- function(effort,
                            variable,
+                           rasters = list(bathy = NULL), # should be terra object
+                           distance_to = list(distance_to_coast = NULL), # should be sf object
                            file_set_directory,
                            try_to_combine_filetsets = T,
                            n_cores = NULL,
@@ -252,5 +254,29 @@ extract_effort <- function(effort,
                 dplyr::select(label, all_of(colnames(extract)[!(colnames(extract) %in% colnames(effort))])), by = "label") %>%
     st_cast()
 
-  return(effort)
+  crseffort <- st_crs(effort)
+
+  for (i in 1:length(rasters)) {
+    if (any(!is.null(rasters[[i]]))) {
+      effort <- effort %>%
+        st_transform(crs = terra::crs(rasters[[i]])) %>%
+        dplyr::mutate(!!names(rasters)[i] := terra::extract(rasters[[i]], ., fun = mean, na.rm = TRUE)[, 2])
+    }
+  }
+
+  for (i in 1:length(distance_to)) {
+    if (any(!is.null(distance_to[[i]]))) {
+      effort <- effort %>%
+        st_transform(crs = crseffort) %>%
+        dplyr::mutate(!!names(distance_to)[i] := c(units::drop_units(st_distance(st_centroid(.),
+                                                                                 distance_to[[i]] %>%
+                                                                                   st_transform(crs = crseffort) %>%
+                                                                                   group_by() %>%
+                                                                                   dplyr::summarise(do_union = F) %>%
+                                                                                   st_cast()))))
+    }
+  }
+
+  return(effort %>%
+           st_cast())
 }

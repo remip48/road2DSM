@@ -13,7 +13,6 @@ model_comparison(
   output_file = paste0(version_preds, "_model_comparison"),
   log1p_trans = NULL,
   grid_folder,
-  static_grid,
   prediction_folder,
   block_file = NULL,
   data_file = NULL,
