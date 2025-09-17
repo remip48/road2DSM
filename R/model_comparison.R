@@ -184,7 +184,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
     calibdata <- calibdata %>%
       dplyr::select(X, Y, year, all_of(c(variable, response, effort_column))) %>%
-      drop_na()
+      tidyr::drop_na()
 
     calibdata[, variable] <- apply(calibdata[, variable], 2, rescale2)
 
@@ -365,7 +365,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
   calibdata <- calibdata %>%
     dplyr::select(X, Y, year, all_of(c(variable, response, effort_column))) %>%
-    drop_na()
+    tidyr::drop_na()
 
   if (!dir.exists(paste0(prediction_folder, "/", response))) {
     dir.create(paste0(prediction_folder, "/", response))
@@ -855,7 +855,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
       calibdata <- calibdata %>%
         dplyr::select(X, Y, year, all_of(c(variable, response, effort_column))) %>%
-        drop_na()
+        tidyr::drop_na()
 
       final_gp <- final %>%
         dplyr::filter(model == unique(model)[1]) %>%
