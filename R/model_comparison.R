@@ -37,44 +37,49 @@
 #'
 #' @examples
 model_comparison <- function(run_models, # output from run_all_DSM
-                                      seg_data, # segments used for run_all_DSM. Should not be an sf object.
-                                      variable,
-                                      effort_column,
-                                      version_preds = as.character(lubridate::today()),
-                                      output_file = paste0(version_preds, "_model_comparison"), # without extension, will be the name of html file
-                                      log1p_trans = NULL,
-                                      grid_folder,
-                                      # static_grid, # grid with variables (static) that were not included in the extract_grids. Must have geometry, and use the exact same grid that the one used for extract_grid.
-                                      prediction_folder,
-                                      block_file = NULL, # add here the sf file containing your sub-blocks for your area if you want to use groupsizes as response (containing the column Name for the sub-names), otherwise let NULL
-                                      data_file = NULL, # add here the intial GPS points to calculate group sizes if needed and print observations. Must contain the column AU for which groupsizes are averaged per AU, and the column Platform (aerial or ship).
-                                      sub_area_analysis_file = NULL, # path for sf file containing sub-areas if you want to investigate abundance per sub-area in addition to globally. Must contain the column Name for each sub-area.
-                                      study_area = NULL, # in case you want to predict only on a part of your prediction grid
-                                      correct_bias = T,
-                                      save_results_bias_corrected = F,
-                                      use_threshold = T,
-                                      quantile_mgcv_fixed = "mgcv", # "mgcv", "fixed" or quantile
-                                      threshold = 1.5, ## either a multiplication factor to use with max(mgcv_density) if quantile_mgcv_fixed = "mgcv",
-                                      # or a (fixed) maximum overall allowed density if quantile_mgcv_fixed = "fixed",
-                                      # or a quantile (0 to 1) to use on the density values if quantile_mgcv_fixed = "quantile"
-                                      breaks_plot = c(-1, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 1.25, 1.5, 1000),
-                                      labels_plot = c("0.00 - 0.10", "0.11 - 0.20", "0.21 - 0.30", "0.31 - 0.40", "0.41 - 0.50",
-                                                       "0.51 - 0.75", "0.76 - 1.00", "1.01 - 1.25", "1.26 - 1.5", "> 1.50"),
-                                      corr_groupsize = NA, # correction factor for groupsize, if groupsize is used, to multiply the predicted densities.
-                                      response, # should contain "group" if it is modelling the number of groups rather than of individuals. But please
-                                      # use n_SpeciesCode for the number of individuals, or n_group_SpeciesCode for the number of groups!
-                                      subspecies = NA, # in case response contains several species. The groupsize estimate will then account for all the subspecies
-                                      filter_year_month_not_in = "0000-00", # year and month that should not be used for prediction
-                                      run_all = F,
-                                      outfile = "log.txt",
-                                      save_posterior_distribution = F,
-                                      n_cores = NULL) {
+                             seg_data, # segments used for run_all_DSM. Should not be an sf object.
+                             variable,
+                             effort_column,
+                             version_preds = as.character(lubridate::today()),
+                             log1p_trans = NULL,
+                             grid_folder,
+                             # static_grid, # grid with variables (static) that were not included in the extract_grids. Must have geometry, and use the exact same grid that the one used for extract_grid.
+                             prediction_folder,
+                             block_file = NULL, # add here the sf file containing your sub-blocks for your area if you want to use groupsizes as response (containing the column Name for the sub-names), otherwise let NULL
+                             data_file = NULL, # add here the intial GPS points to calculate group sizes if needed and print observations. Must contain the column AU for which groupsizes are averaged per AU, and the column Platform (aerial or ship).
+                             sub_area_analysis_file = NULL, # path for sf file containing sub-areas if you want to investigate abundance per sub-area in addition to globally. Must contain the column Name for each sub-area.
+                             study_area = NULL, # in case you want to predict only on a part of your prediction grid
+                             correct_bias = F,
+                             save_results_bias_corrected = F,
+                             use_threshold = T,
+                             quantile_mgcv_fixed = "mgcv", # "mgcv", "fixed" or quantile
+                             threshold = 1.5, ## either a multiplication factor to use with max(mgcv_density) if quantile_mgcv_fixed = "mgcv",
+                             # or a (fixed) maximum overall allowed density if quantile_mgcv_fixed = "fixed",
+                             # or a quantile (0 to 1) to use on the density values if quantile_mgcv_fixed = "quantile"
+                             breaks_plot = c(-1, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 1.25, 1.5, 1000),
+                             labels_plot = c("0.00 - 0.10", "0.11 - 0.20", "0.21 - 0.30", "0.31 - 0.40", "0.41 - 0.50",
+                                             "0.51 - 0.75", "0.76 - 1.00", "1.01 - 1.25", "1.26 - 1.5", "> 1.50"),
+                             corr_groupsize = NA, # correction factor for groupsize, if groupsize is used, to multiply the predicted densities.
+                             response, # should contain "group" if it is modelling the number of groups rather than of individuals. But please
+                             # use n_SpeciesCode for the number of individuals, or n_group_SpeciesCode for the number of groups!
+                             subspecies = NA, # in case response contains several species. The groupsize estimate will then account for all the subspecies
+                             filter_year_month_not_in = "0000-00", # year and month that should not be used for prediction
+                             run_all = F,
+                             outfile = "log.txt",
+                             save_posterior_distribution = F,
+                             n_cores = NULL) {
 
   static_grid <- "prediction_static_grid.shp"
 
+  if (!is.null(prediction_folder)) {
+    prediction_folder <- gsub("\\\\", "/", prediction_folder)
+  }
+
+  output_file = paste0(version_preds, "_model_comparison") # without extension, will be the name of html file
+
   ## this function is adapted to the type of data of ITAW.
 
-  cat("Running version", version_preds, "-", ifelse(run_all,
+  cat("Running version", version_preds, ":", ifelse(run_all,
                                                     "running EVERYTHING.",
                                                     "loading EXISTING files if any."), "\n")
   if (correct_bias) {
@@ -82,7 +87,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
     if (save_posterior_distribution) {
       cat("Posterior distribution of cell predictions will be saved under",
           paste0(version_preds, "_for_uncertainties.RData."),
-          "They may take large space on the hard disk!")
+          "They may take large space on the hard disk!\n")
     }
     if (use_threshold) {
       cat("Threshold applied to the pseudo-posterior distribution:", case_when(quantile_mgcv_fixed == "mgcv" ~ paste0(threshold, " * max(mgcv_predictions) inds/km²"),
@@ -94,10 +99,10 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
   rescale2 <- function (ynew, y = NULL)
   {
-    assert_that(is.numeric(ynew) && is.vector(ynew) && length(ynew) >=
-                  3)
-    assert_that((is.numeric(y) && is.vector(y) && length(y) >=
-                   3) || is.null(y))
+    # assert_that(is.numeric(ynew) && is.vector(ynew) && length(ynew) >=
+    #               3)
+    # assert_that((is.numeric(y) && is.vector(y) && length(y) >=
+    #                3) || is.null(y))
     if (is.null(y)) {
       out <- (ynew - mean(ynew, na.rm = TRUE))/(sd(ynew, na.rm = TRUE))
     }
@@ -131,7 +136,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
   # pkg::fun(rnaturalearth)
 
   if (is.null(n_cores)) {
-    n_cores <- detectCores() - 1
+    n_cores <- parallel::detectCores() - 1
     cat("Parallel processing using", n_cores, "cores.\n")
   }
 
@@ -225,15 +230,14 @@ model_comparison <- function(run_models, # output from run_all_DSM
     "```"
   )
 
-  ###################
   for (i in 1:length(run_models$best_models)) {
     chunk_modeli <- quote({
-      summary(run_models$best_models[[i]])
+      print(summary(run_models$best_models[[i]]))
       if (str_detect(as.character(run_models$best_models[[i]]$formula)[3], fixed("bs = \"so\", xt = list(bnd = bnd)"))) {
-        plot(run_models$best_models[[i]], select = 1)
-        gratia::draw(run_models$best_models4plotting[[i]], rug = F, select = -1)
+        (plot(run_models$best_models[[i]], select = 1))
+        print(gratia::draw(run_models$best_models4plotting[[i]], rug = F, select = -1))
       } else {
-        gratia::draw(run_models$best_models4plotting[[i]], rug = F)
+        print(gratia::draw(run_models$best_models4plotting[[i]], rug = F))
       }
       qq.gam(run_models$best_models4plotting[[i]], rep = 1000)
 
@@ -251,10 +255,10 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
       summary(ratio)
 
-      ggplot() +
-        geom_histogram(data = data.frame(Ratio = ratio) %>%
-                         dplyr::filter(!is.na(Ratio)), aes(x = Ratio)) +
-        scale_y_sqrt(name = "Count")
+      print(ggplot2::ggplot() +
+              ggplot2::geom_histogram(data = data.frame(Ratio = ratio) %>%
+                                        dplyr::filter(!is.na(Ratio)), ggplot2::aes(x = Ratio)) +
+              ggplot2::scale_y_sqrt(name = "Count"))
 
       checks <- as.data.frame(calibdata)
       checks$new <- checks[, response]
@@ -265,15 +269,15 @@ model_comparison <- function(run_models, # output from run_all_DSM
                        Value = "Predicted value")) %>%
         mutate(Value = as.factor(Value))
 
-      rootg <- ggplot() +
-        geom_histogram(data = checks %>%
-                         dplyr::filter(as.character(Value) == "Observed value"), aes(x = new, fill = Value), alpha = 1, binwidth = 1) +
-        scale_fill_manual(values = viridis::viridis(256)[1]) +
-        new_scale_fill() +
-        geom_histogram(data = checks %>%
-                         dplyr::filter(as.character(Value) == "Predicted value"), aes(x = new, fill = Value), alpha = .5, binwidth = 1) +
-        scale_fill_manual(values = viridis::viridis(256)[256]) +
-        theme(legend.title = element_blank())
+      rootg <- ggplot2::ggplot() +
+        ggplot2::geom_histogram(data = checks %>%
+                                  dplyr::filter(as.character(Value) == "Observed value"), ggplot2::aes(x = new, fill = Value), alpha = 1, binwidth = 1) +
+        ggplot2::scale_fill_manual(values = viridis::viridis(256)[1]) +
+        ggnewscale::new_scale_fill() +
+        ggplot2::geom_histogram(data = checks %>%
+                                  dplyr::filter(as.character(Value) == "Predicted value"), ggplot2::aes(x = new, fill = Value), alpha = .5, binwidth = 1) +
+        ggplot2::scale_fill_manual(values = viridis::viridis(256)[256]) +
+        ggplot2::theme(legend.title = ggplot2::element_blank())
 
       if (max(checks$new, na.rm = T) > 20) {
         rootg <- rootg +
@@ -282,7 +286,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
       print(rootg)
     })
-##################
+
     rmd_text <- c(
       rmd_text,
       paste0("```{r best_models", i, ", echo=FALSE}"),
@@ -291,182 +295,204 @@ model_comparison <- function(run_models, # output from run_all_DSM
     )
   }
 
-  ##############
-  run_preds_chunk <- quote({
-    to_runm <- run_models$all_fits_binded[1:length(run_models$best_models), ] %>%
-      dplyr::mutate(id = 1:n()) %>%
-      dplyr::filter(stacking_weights >= .1) %>%
-      pull(id)
+  static <- read_sf(paste0(grid_folder, "/", static_grid)) %>%
+    st_transform(crs = 3035)
 
-    fit_models <- run_models$all_fits_binded[to_runm, ]
-    fit_models$stacking_weights <- fit_models$stacking_weights / sum(fit_models$stacking_weights)
+  if (all(!is.null(study_area))) {
+    static <- st_intersection(static, study_area)
+  }
 
-    models <- run_models$best_models[to_runm]
+  static <- static %>%
+    dplyr::mutate(areakm2 = units::drop_units(st_area(.)) / 10^6)
 
-    ls <- list.files(grid_folder)
-    ls <- ls[!str_detect(ls, fixed(static_grid)) & str_detect(ls, "grid")]
-    ls <- do.call("c", lapply(ls, function(l) {
-      if (any(str_detect(l, fixed(paste0(as.character(unique(seg_data$year)),
-                                         "-")))) &
-          !any(filter_year_month_not_in, function(ym) {
-            str_detect(l, fixed(ym))
-          })) {
-        return(l)
-      } else {
-        return(NULL)
+  cc <- st_coordinates(st_centroid(static))
+
+  static <- static %>%
+    dplyr::mutate(X = cc[, 1],
+                  Y = cc[, 2])
+
+  rm(cc)
+
+  to_runm <- run_models$all_fits_binded[1:length(run_models$best_models), ] %>%
+    dplyr::mutate(id = 1:n()) %>%
+    dplyr::filter(stacking_weights >= .1) %>%
+    pull(id)
+
+  fit_models <- run_models$all_fits_binded[to_runm, ]
+  fit_models$stacking_weights <- fit_models$stacking_weights / sum(fit_models$stacking_weights)
+
+  models <- run_models$best_models[to_runm]
+
+  ls <- list.files(grid_folder)
+  ls <- ls[!str_detect(ls, fixed(static_grid)) & str_detect(ls, fixed("grid")) & str_detect(ls, fixed(".rds"))]
+  # ls <- do.call("c", lapply(ls, function(l) {
+  #   if (any(str_detect(l, fixed(paste0(as.character(unique(seg_data$year)),
+  #                                      "-")))) &
+  #       !any(filter_year_month_not_in, function(ym) {
+  #         str_detect(l, fixed(ym))
+  #       })) {
+  #     return(l)
+  #   } else {
+  #     return(NULL)
+  #   }
+  # }))
+  ls <- do.call("c", lapply(ls, function(l) {
+    date <- str_remove_all(dplyr::last(str_split_1(l, "_")), fixed(".rds"))
+    if (any(str_detect(date, fixed(filter_year_month_not_in)))) {
+      return(NULL)
+    } else {
+      return(l)
+    }
+  }))
+
+  calibdata <- seg_data %>%
+    as.data.frame()
+
+  if (length(log1p_trans) > 0 & all(!is.na(log1p_trans))) {
+
+    for (k in log1p_trans) {
+      newcol <- calibdata %>%
+        pull(k) %>%
+        log1p()
+
+      calibdata <- calibdata %>%
+        dplyr::select(-all_of(k)) %>%
+        mutate(new = newcol)
+
+      colnames(calibdata)[colnames(calibdata) == "new"] <- k
+    }
+  }
+
+  calibdata <- calibdata %>%
+    dplyr::select(X, Y, year, all_of(c(variable, response, effort_column))) %>%
+    drop_na()
+
+  if (!dir.exists(paste0(prediction_folder, "/", response))) {
+    dir.create(paste0(prediction_folder, "/", response))
+  }
+
+  if (!file.exists(paste0(prediction_folder, "/", response, "/", version_preds,
+                          "_average_predictions.gpkg")) | run_all) {
+
+    cl <- makeCluster(n_cores, outfile = outfile)
+    registerDoParallel(cl)
+
+    run <- foreach::foreach(f = ls,
+                            .packages = c("sf", "dplyr", "purrr", "stringr", "lubridate"),
+                            .noexport = ls()[!(ls() %in% c("static", "ls", "variable", "year", "calibdata", "run_all", "rescale2",
+                                                           "models", "to_runm", "version_preds", "response", "log1p_trans", "effort_column", "grid_folder", "prediction_folder"))]
+    ) %dopar% {
+      cat(match(f, ls), "/", length(ls), "\n")
+
+      date <- str_remove_all(dplyr::last(str_split_1(f, "_")), fixed(".rds"))
+
+      current_predgrid <- readRDS(paste0(grid_folder, "/", f)) %>%
+        st_drop_geometry() %>%
+        mutate(year = as.numeric(lubridate::year(date)))
+
+      gridi <- static %>%
+        dplyr::select(id, areakm2, all_of(variable[variable %in% colnames(static)]), X, Y)
+
+      gridi <- gridi %>%
+        left_join(current_predgrid %>%
+                    dplyr::select(id, all_of(colnames(.)[!(colnames(.) %in% colnames(gridi))])),
+                  by = "id")
+
+      grid <- gridi %>%
+        st_drop_geometry()
+
+      grid$new <- grid$areakm2
+      colnames(grid)[which(colnames(grid) == "new")] <- effort_column
+
+      grid <- grid %>%
+        as.data.frame()
+
+      if (length(log1p_trans) > 0 & all(!is.na(log1p_trans))) {
+        for (k in log1p_trans) {
+          newcol <- grid %>%
+            pull(k) %>%
+            log1p()
+
+          grid <- grid %>%
+            dplyr::select(-all_of(k)) %>%
+            mutate(new = newcol)
+
+          colnames(grid)[colnames(grid) == "new"] <- k
+        }
       }
-    }))
 
-    static <- read_sf(paste0(grid_folder, "/", static_grid)) %>%
-      st_transform(crs = 3035)
+      new_var <- map_dfc(variable, function(v) {
 
-    if (all(!is.null(study_area))) {
-      static <- st_intersection(static, study_area)
-    }
+        gridv <- grid %>%
+          pull(v)
 
-    static <- static %>%
-      dplyr::mutate(areakm2 = units::drop_units(st_area(.)) / 10^6)
+        ref <- calibdata %>%
+          pull(v)
 
-    cc <- st_coordinates(st_centroid(static))
+        out <- data.frame(new = rescale2(ynew = gridv, y = ref))
 
-    static <- static %>%
-      dplyr::mutate(X = cc[, 1],
-                    Y = cc[, 2])
+        colnames(out) <- v
 
-    rm(cc)
+        return(out)
 
-    calibdata <- seg_data %>%
-      as.data.frame()
+      })
 
-    if (length(log1p_trans) > 0 & all(!is.na(log1p_trans))) {
+      grid[, variable] <- new_var
 
-      for (k in log1p_trans) {
-        newcol <- calibdata %>%
-          pull(k) %>%
-          log1p()
+      run <- map(1:length(models), function(i) {
 
-        calibdata <- calibdata %>%
-          dplyr::select(-all_of(k)) %>%
-          mutate(new = newcol)
-
-        colnames(calibdata)[colnames(calibdata) == "new"] <- k
-      }
-    }
-
-    calibdata <- calibdata %>%
-      dplyr::select(X, Y, year, all_of(c(variable, response, effort_column))) %>%
-      drop_na()
-
-    if (!dir.exists(paste0(folder_predictions, "/", response))) {
-      dir.create(paste0(folder_predictions, "/", response))
-    }
-
-    if (!file.exists(paste0(folder_predictions, "/", response, "/", version_preds,
-                            "_average_predictions.gpkg")) | run_all) {
-
-      cl <- makeCluster(n_cores, outfile = outfile)
-      registerDoParallel(cl)
-
-      run <- foreach::foreach(f = ls,
-                              .packages = c("sf", "dplyr", "purrr", "stringr", "lubridate"),
-                              .noexport = ls()[!(ls() %in% c("static", "ls", "variable", "year", "calibdata", "run_all", "rescale2",
-                                                             "models", "to_runm", "version_preds", "response", "log1p_trans", "effort_column", "grid_folder", "folder_predictions"))]
-      ) %dopar% {
-        cat(match(f, ls), "/", length(ls), "\n")
-
-        date <- str_remove_all(dplyr::last(str_split_1(f, "_")), fixed(".rds"))
-
-        current_predgrid <- readRDS(paste0(grid_folder, "/", f)) %>%
-          st_drop_geometry() %>%
-          mutate(year = as.numeric(lubridate::year(date)))
-
-        gridi <- static %>%
-          dplyr::select(id, areakm2, all_of(variable[variable %in% colnames(static)]), X, Y) %>%
-          left_join(current_predgrid,
-                    by = "id")
-
-        grid <- gridi %>%
-          st_drop_geometry()
-
-        grid$new <- grid$areakm2
-        colnames(grid)[which(colnames(grid) == "new")] <- effort_column
-
-        grid <- grid %>%
-          as.data.frame()
-
-        if (length(log1p_trans) > 0 & all(!is.na(log1p_trans))) {
-          for (k in log1p_trans) {
-            newcol <- grid %>%
-              pull(k) %>%
-              log1p()
-
-            grid <- grid %>%
-              dplyr::select(-all_of(k)) %>%
-              mutate(new = newcol)
-
-            colnames(grid)[colnames(grid) == "new"] <- k
-          }
+        if (!dir.exists(paste0(prediction_folder, "/", response, "/model",
+                               to_runm[i]))) {
+          dir.create(paste0(prediction_folder, "/", response, "/model",
+                            to_runm[i]))
         }
 
-        new_var <- map_dfc(variable, function(v) {
+        if (!file.exists(paste0(prediction_folder, "/", response, "/model",
+                                to_runm[i], "/", version_preds, "_prediction_", date, ".gpkg")) | run_all) {
+          pred <- predict(models[[i]], grid, type = "response")
 
-          gridv <- grid %>%
-            pull(v)
+          new_pred <- gridi %>%
+            mutate(n_pred = unname(as.numeric(pred)),
+                   density_pred = n_pred / areakm2)
 
-          ref <- calibdata %>%
-            pull(v)
-
-          out <- data.frame(new = rescale2(ynew = gridv, y = ref))
-
-          colnames(out) <- v
-
-          return(out)
-
-        })
-
-        grid[, variable] <- new_var
-
-        run <- map(1:length(models), function(i) {
-
-          if (!dir.exists(paste0(folder_predictions, "/", response, "/model",
-                                 to_runm[i]))) {
-            dir.create(paste0(folder_predictions, "/", response, "/model",
-                              to_runm[i]))
-          }
-
-          if (!file.exists(paste0(folder_predictions, "/", response, "/model",
-                                  to_runm[i], "/", version_preds, "_prediction_", date, ".gpkg")) | run_all) {
-            pred <- predict(models[[i]], grid, type = "response")
-
-            new_pred <- gridi %>%
-              mutate(n_pred = unname(as.numeric(pred)),
-                     density_pred = n_pred / areakm2)
-
-            saveRDS(new_pred %>%
-                      st_drop_geometry(), paste0(folder_predictions, "/", response, "/model",
-                                                 to_runm[i], "/", version_preds, "_prediction_", date, ".rds"))
-          }
-
-          return(NULL)
-
-        })
+          saveRDS(new_pred %>%
+                    st_drop_geometry(), paste0(prediction_folder, "/", response, "/model",
+                                               to_runm[i], "/", version_preds, "_prediction_", date, ".rds"))
+        }
 
         return(NULL)
 
-      }
+      })
+
+      return(NULL)
+
     }
+  }
 
-    to_runmi <- NA
+  to_runmi <- NA
 
-    ls <- list.files(paste0(folder_predictions, "/", response, "/model",
-                            to_runm[1]))
+  ls <- list.files(paste0(prediction_folder, "/", response, "/model",
+                          to_runm[1]))
 
-    ls <- ls[str_detect(ls, "_prediction_") & str_detect(ls, version_preds)]
+  ls <- ls[str_detect(ls, "_prediction_") & str_detect(ls, version_preds)]
 
-    dates <- unique(do.call("c", map(ls, function(l) {
-      return(str_remove_all(dplyr::last(str_split_1(l, "_")), fixed(".rds")))
-    })))
+  ls <- do.call("c", lapply(ls, function(l) {
+    date <- str_remove_all(dplyr::last(str_split_1(l, "_")), fixed(".rds"))
+    if (any(str_detect(date, fixed(filter_year_month_not_in)))) {
+      return(NULL)
+    } else {
+      return(l)
+    }
+  }))
 
+  dates <- unique(do.call("c", map(ls, function(l) {
+    return(str_remove_all(dplyr::last(str_split_1(l, "_")), fixed(".rds")))
+  })))
+
+  sp <- last(str_split_1(response, "_"))
+
+  ##############
+  run_preds_chunk <- quote({
     kable(data.frame(date = sort(dates)) %>%
             dplyr::mutate(Year = as.character(lubridate::year(date))) %>%
             group_by(Year) %>%
@@ -476,8 +502,6 @@ model_comparison <- function(run_models, # output from run_all_DSM
           caption = "Dates used for prediction:")
 
     to_runm_files <- paste0("model", na.omit(c(to_runmi, to_runm)))
-
-    sp <- last(str_split_1(response, "_"))
 
     if (!is.null(block_file)) {
       blocks <- read_sf(block_file) %>%
@@ -490,7 +514,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
     } else {
       blocks <- static %>%
         st_transform(crs = 3035) %>%
-        st_buffer(units::set_units(100, m)) %>%
+        # st_buffer(units::set_units(100, m)) %>%
         group_by() %>%
         dplyr::summarise(do_union = T) %>%
         st_cast("MULTIPOLYGON")
@@ -502,23 +526,23 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
     blocksti <- blocks
 
-    if (!file.exists(paste0(folder_predictions, "/", response, "/", version_preds,
+    if (!file.exists(paste0(prediction_folder, "/", response, "/", version_preds,
                             "_average_predictions.gpkg")) | run_all) {
 
       mod_pred <- foreach::foreach(d = dates,
                                    # .combine = rbind,
                                    .packages = c("sf", "dplyr", "purrr", "stringr", "ggplot2", "png"),
                                    .noexport = ls()[!(ls() %in% c("to_runm_files", "group_sizes_all", "do_plot", "response", "WorkDir",
-                                                                  "version_preds", "folder_predictions"))]) %dopar% {
+                                                                  "version_preds", "prediction_folder"))]) %dopar% {
 
                                                                     run <- map_dfr(to_runm_files, function(i) {
 
-                                                                      f <- list.files(paste0(folder_predictions, "/", response, "/",
+                                                                      f <- list.files(paste0(prediction_folder, "/", response, "/",
                                                                                              i))
 
                                                                       f <- f[str_detect(f, d) & str_detect(f, version_preds)]
 
-                                                                      out <- readRDS(paste0(folder_predictions, "/", response, "/",
+                                                                      out <- readRDS(paste0(prediction_folder, "/", response, "/",
                                                                                             i, "/", f)) %>%
                                                                         # st_drop_geometry() %>%
                                                                         dplyr::select(id, X, Y, areakm2, n_pred, density_pred) %>%
@@ -546,10 +570,6 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
       pred_grid_cent <- pred_grid %>%
         dplyr::filter(model == unique(model)[1])
-
-      ######
-
-      ######
 
       final <- map_dfr(unique(blocksti$Name), function(b) {
 
@@ -586,10 +606,10 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
       write_sf(final,
                append = F,
-               paste0(folder_predictions, "/", response, "/", version_preds,
+               paste0(prediction_folder, "/", response, "/", version_preds,
                       "_average_predictions.gpkg"))
     } else {
-      final <- read_sf(paste0(folder_predictions, "/", response, "/", version_preds,
+      final <- read_sf(paste0(prediction_folder, "/", response, "/", version_preds,
                               "_average_predictions.gpkg"))
     }
 
@@ -701,20 +721,20 @@ model_comparison <- function(run_models, # output from run_all_DSM
   })
   ##############
   rplot_chunk <- quote({
-    ggplot() +
-      geom_sf(data = final %>%
-                dplyr::filter(areakm2 > 0) %>%
-                dplyr::filter(!is.na(Avg_density)) %>%
-                left_join(group_sizes %>%
-                            dplyr::select(AU, mean),
-                          by = "AU") %>%
-                mutate(Avg_density = Avg_density * mean), aes(fill = cut(Avg_density,
-                                                                         breaks = breaks_plot,
-                                                                         labels = labels_plot
-                )), color = NA) +
-      facet_wrap(~ model) +
-      scale_fill_viridis_d(drop = F, name = "Average density\n(ind/km2)") +
-      labs(title = "Predictions")
+    ggplot2::ggplot() +
+      ggplot2::geom_sf(data = final %>%
+                         dplyr::filter(areakm2 > 0) %>%
+                         dplyr::filter(!is.na(Avg_density)) %>%
+                         left_join(group_sizes %>%
+                                     dplyr::select(AU, mean),
+                                   by = "AU") %>%
+                         mutate(Avg_density = Avg_density * mean), ggplot2::aes(fill = cut(Avg_density,
+                                                                                           breaks = breaks_plot,
+                                                                                           labels = labels_plot
+                         )), color = NA) +
+      ggplot2::facet_wrap(~ model) +
+      ggplot2::scale_fill_viridis_d(drop = F, name = "Average density\n(ind/km2)") +
+      ggplot2::labs(title = "Predictions")
   })
   ##############
   rallplot_chunk <- quote({
@@ -733,8 +753,8 @@ model_comparison <- function(run_models, # output from run_all_DSM
       for_plotting_gp_size <- seg_data %>%
         dplyr::mutate(podsize = get(response)) %>%
         dplyr::filter(podsize > 0) %>%
-        st_as_sf(coords = c("X", "Y"), crs = 4326) %>%
-        st_transform(crs = 3035) %>%
+        st_as_sf(coords = c("X", "Y"), crs = 3035) %>%
+        # st_transform(crs = 3035) %>%
         dplyr::mutate(X = st_coordinates(.)[,1],
                       Y = st_coordinates(.)[,2]) %>%
         st_drop_geometry()
@@ -747,21 +767,22 @@ model_comparison <- function(run_models, # output from run_all_DSM
     blocksg <- blocks %>%
       st_transform(crs = 3035)
 
-    print(ggplot() +
-            geom_sf(data = blocksg, fill = NA, color = "red") +
+    print(ggplot2::ggplot() +
+            # geom_sf(data = static) +
+            ggplot2::geom_sf(data = blocksg, fill = NA, color = "red") +
             # facet_wrap(~ Platform) +
-            geom_point(data = for_plotting_gp_size %>%
-                         arrange(podsize),
-                       aes(x = X, y = Y, color = cut(podsize,
-                                                     breaks = c(-1, 1, 5, 10, 20, 50, 1000),
-                                                     labels = c("1", "2 - 5", "6 - 10",
-                                                                "11 - 20", "21 - 50", "> 50"))), size = 1) +
-            scale_color_viridis_d(name = "Nb of sightings") +
-            labs(title = ifelse(is.null(data_file) & groupsizes, "Number of groups observed per platform",
-                                paste0("Number of sightings per segment",
-                                       ifelse(!is.na(corr_groupsize) & corr_groupsize != 1,
-                                              paste0("\nmultiplied by correction factor = ", corr_groupsize),
-                                              "")))))
+            ggplot2::geom_point(data = for_plotting_gp_size %>%
+                                  arrange(podsize),
+                                ggplot2::aes(x = X, y = Y, color = cut(podsize,
+                                                                       breaks = c(-1, 1, 5, 10, 20, 50, 1000),
+                                                                       labels = c("1", "2 - 5", "6 - 10",
+                                                                                  "11 - 20", "21 - 50", "> 50"))), size = 1) +
+            ggplot2::scale_color_viridis_d(name = "Nb of sightings") +
+            ggplot2::labs(title = ifelse(is.null(data_file) & groupsizes, "Number of groups observed per platform",
+                                         paste0("Number of sightings per segment",
+                                                ifelse(!is.na(corr_groupsize) & corr_groupsize != 1,
+                                                       paste0("\nmultiplied by correction factor = ", corr_groupsize),
+                                                       "")))))
     # }
 
     if (groupsizes) {
@@ -877,13 +898,13 @@ model_comparison <- function(run_models, # output from run_all_DSM
       }
 
       if (!is.null(sub_area_analysis_file)) {
-        if (!file.exists(paste0(folder_predictions, "/", response, "/", version_preds,
+        if (!file.exists(paste0(prediction_folder, "/", response, "/", version_preds,
                                 "_AU_grid_predictions.rds")) | run_all) {
           hp <- read_sf(sub_area_analysis_file) %>%
             st_transform(crs = 3035) %>%
             st_cast("MULTIPOLYGON")
 
-          cl <- makeCluster(min(c(length(unique(hp$Name)), detectCores() - 1)), outfile = "log.txt")
+          cl <- makeCluster(min(c(length(unique(hp$Name)), parallel::detectCores() - 1)), outfile = "log.txt")
           registerDoParallel(cl)
 
           perHP <- do.call("rbind", foreach::foreach(n = unique(hp$Name),
@@ -931,10 +952,10 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
           list_id_perHP <- as.data.frame(list_id_perHP)
 
-          saveRDS(list_id_perHP, paste0(folder_predictions, "/", response, "/", version_preds,
+          saveRDS(list_id_perHP, paste0(prediction_folder, "/", response, "/", version_preds,
                                         "_AU_grid_predictions.rds"))
         } else {
-          list_id_perHP <- readRDS(paste0(folder_predictions, "/", response, "/", version_preds,
+          list_id_perHP <- readRDS(paste0(prediction_folder, "/", response, "/", version_preds,
                                           "_AU_grid_predictions.rds"))
         }
       }
@@ -944,7 +965,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
       for (i in to_runm) {
         for_model <- i
         model_folder <- i
-        GridDir <- paste0(folder_predictions, "/",
+        GridDir <- paste0(prediction_folder, "/",
                           response, "/model", model_folder)
         set.seed(11)
         gam_mod <- all_models$best_models[[for_model]]
@@ -954,8 +975,17 @@ model_comparison <- function(run_models, # output from run_all_DSM
         log1p_trans <- log1p_trans[log1p_trans %in% covariates]
         ls <- list.files(GridDir)
         ls <- ls[str_detect(ls, "_prediction_") & str_detect(ls, version_preds)]
+        ls <- do.call("c", lapply(ls, function(l) {
+          date <- str_remove_all(dplyr::last(str_split_1(l, "_")), fixed(".rds"))
+          if (any(str_detect(date, fixed(filter_year_month_not_in)))) {
+            return(NULL)
+          } else {
+            return(l)
+          }
+        }))
+
         dd <- do.call("c", lapply(ls, function(l) {
-          return(str_sub(str_split_1(l, "_")[3], 1, 10))
+          return(str_remove_all(dplyr::last(str_split_1(l, "_")), fixed(".rds")))
         }))
 
         final_correctedm <- final_corrected %>%
@@ -967,7 +997,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
           # source(paste0(WorkDir_CV, "SCANS-IV_model", "/08_OSPAR_Matthieu_CV_estimate/20211105_FctPredictions.R"))
 
           if (!file.exists(paste0(GridDir, "/", version_preds, "_for_uncertainties.RData")) | run_all) {
-            cl <- makeCluster(detectCores() - 1)
+            cl <- makeCluster(parallel::detectCores() - 1)
             registerDoParallel(cl)
 
             to_pred <- (foreach(d = dd,
@@ -1025,7 +1055,6 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
             parallel <- T
 
-            ##########
             beta <- function(fitted_model, n_sim = 200, seed_id = 19790428) {
               if(!is.null(seed_id)) {
                 set.seed(seed_id)
@@ -1036,7 +1065,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
               return(theta)
             }
 
-            n_cores <- floor(nc_cores / 4)
+            n_cores <- ceiling(n_cores / 4)
             cat("Parallel processing with", n_cores, "for pseudo-posterior distribution estimate.\n")
 
             cl <- makeCluster(n_cores)
@@ -1053,7 +1082,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
             stopCluster(cl)
             gc()
 
-            cl <- makeCluster(floor(detectCores() / 4))
+            cl <- makeCluster(floor(parallel::detectCores() / 4))
             registerDoParallel(cl)
 
             allpred <- foreach(l = allX,
@@ -1065,10 +1094,9 @@ model_comparison <- function(run_models, # output from run_all_DSM
             rm(to_pred)
             gc()
 
-            ##########
 
             if (save_posterior_distribution){save(allpred,
-                 file = paste0(GridDir, "/", version_preds, "_for_uncertainties.RData"))}
+                                                  file = paste0(GridDir, "/", version_preds, "_for_uncertainties.RData"))}
 
           } else {
             load(paste0(GridDir, "/", version_preds, "_for_uncertainties.RData"))
@@ -1111,8 +1139,8 @@ model_comparison <- function(run_models, # output from run_all_DSM
             return(out)
           })
 
-          cat("Parallel processing with", round(n_cores / 2, 0), "for BIAS estimate and correction.\n")
-          clust <- makeCluster(round(n_cores / 2, 0))
+          cat("Parallel processing with", ceiling(n_cores / 2), "for BIAS estimate and correction.\n")
+          clust <- makeCluster(ceiling(n_cores / 2))
           registerDoParallel(clust)
 
           per_cell <- (foreach(sim = 1:n,
@@ -1263,23 +1291,21 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
         print(kable(summary_abund, caption = "Non-biased final abundance estimates:"))
 
-        ######### STOPPED HERE: need to save the results if save_results_bias_corrected in a proper file
-
-        print(ggplot() +
-                geom_histogram(data = #summary_abundi %>%
-                                 # dplyr::mutate(Formula = "Mean") %>%
-                                 # rbind(
-                                 summary_abundi %>%
-                                 # dplyr::mutate(Formula = "Median",
-                                 dplyr::mutate(Formula = "Mean",
-                                               # Abundance = median)#)
-                                               Abundance = Abundance)#)
-                               , aes(x = Abundance), show.legend = F, fill = "midnightblue") +
+        print(ggplot2::ggplot() +
+                ggplot2::geom_histogram(data = #summary_abundi %>%
+                                          # dplyr::mutate(Formula = "Mean") %>%
+                                          # rbind(
+                                          summary_abundi %>%
+                                          # dplyr::mutate(Formula = "Median",
+                                          dplyr::mutate(Formula = "Mean",
+                                                        # Abundance = median)#)
+                                                        Abundance = Abundance)#)
+                                        , ggplot2::aes(x = Abundance), show.legend = F, fill = "midnightblue") +
                 # scale_fill_viridis_d() +
                 # scale_y_sqrt() +
-                scale_x_continuous(name = "Abundance") +
+                ggplot2::scale_x_continuous(name = "Abundance") +
                 # facet_wrap(~ Formula, scales = "free") +
-                labs(title = paste0("Histogram of the abundances from the ", n, " simulations")))
+                ggplot2::labs(title = paste0("Histogram of the abundances from the ", n, " simulations")))
 
         ## Calculation of total abundance based on the mgcv response output.
         final_abund_mgcvi <- final_correctedm %>%
@@ -1374,20 +1400,20 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
           print(kable(summary_abund_HP))
 
-          print(ggplot() +
-                  geom_histogram(data = #summary_abund_HPi %>%
-                                   # dplyr::mutate(Formula = "Mean") %>%
-                                   # rbind(
-                                   summary_abund_HPi %>%
-                                   dplyr::mutate(Formula = "Mean",
-                                                 Abundance = Abundance)#)
-                                 , aes(x = Abundance), show.legend = F, fill = "midnightblue") +
+          print(ggplot2::ggplot() +
+                  ggplot2::geom_histogram(data = #summary_abund_HPi %>%
+                                            # dplyr::mutate(Formula = "Mean") %>%
+                                            # rbind(
+                                            summary_abund_HPi %>%
+                                            dplyr::mutate(Formula = "Mean",
+                                                          Abundance = Abundance)#)
+                                          , ggplot2::aes(x = Abundance), show.legend = F, fill = "midnightblue") +
                   # scale_fill_viridis_d() +
                   # scale_y_sqrt() +
-                  facet_wrap(~ AU, scales = "free") +
+                  ggplot2::facet_wrap(~ AU, scales = "free") +
                   # facet_grid(AU ~ Formula, scales = "free") +
-                  scale_x_continuous(name = "Abundance") +
-                  labs(title = paste0("Histogram of the abundances from the ", n, " simulations per Assessment Unit")))
+                  ggplot2::scale_x_continuous(name = "Abundance") +
+                  ggplot2::labs(title = paste0("Histogram of the abundances from the ", n, " simulations per Assessment Unit")))
         }
 
         if (!("groupsize" %in% colnames(per_cell))) { # for the modelled groupsize models where groupsize was directly integrated in the creation of per_cell object
@@ -1476,56 +1502,56 @@ model_comparison <- function(run_models, # output from run_all_DSM
                                      Corrected_bias = bias),
                      paste0(GridDir, "/", version_preds, "_biascorrected_results_Model_", i, ".shp"),
                      append = F
-                       #ifelse(run_all, FALSE, NA)
-                       )
+                     #ifelse(run_all, FALSE, NA)
+            )
           }
         }
 
-        p1 <- ggplot() +
-          geom_sf(data = pred_grid_cent %>%
-                    # dplyr::filter(!is.na(Avg_density)) %>%
-                    left_join(summary_abund_percell %>%
-                                dplyr::mutate(Median = Median_med) %>%
-                                # dplyr::mutate(Median = Median_med * groupsize,
-                                #               Abundance = Abundance * groupsize) %>%
-                                dplyr::select(id, Abundance, Median),
-                              by = "id") %>%
-                    dplyr::filter(!is.na(Abundance)), aes(fill = cut(Abundance / areakm2,
-                                                                     # breaks = c(-1,.4,.8,1.2,1.5,2,2.5,3,3.5,100),
-                                                                     breaks = breaks_plot,
-                                                                     # labels = c("0.00 - 0.40", "0.41 - 0.80", "0.81 - 1.20",
-                                                                     #            "1.21 - 1.50", "1.51 - 2.00", "2.01 - 2.50",
-                                                                     #            "2.51 - 3.00", "3.01 - 3.50", "> 3.50")
-                                                                     labels = labels_plot
-                    )), color = NA) +
-          scale_fill_viridis_d(drop = F, name = "Density\n(ind/km2)", #\naveraged between days,\nmedian between simulation)"
+        p1 <- ggplot2::ggplot() +
+          ggplot2::geom_sf(data = pred_grid_cent %>%
+                             # dplyr::filter(!is.na(Avg_density)) %>%
+                             left_join(summary_abund_percell %>%
+                                         dplyr::mutate(Median = Median_med) %>%
+                                         # dplyr::mutate(Median = Median_med * groupsize,
+                                         #               Abundance = Abundance * groupsize) %>%
+                                         dplyr::select(id, Abundance, Median),
+                                       by = "id") %>%
+                             dplyr::filter(!is.na(Abundance)), ggplot2::aes(fill = cut(Abundance / areakm2,
+                                                                                       # breaks = c(-1,.4,.8,1.2,1.5,2,2.5,3,3.5,100),
+                                                                                       breaks = breaks_plot,
+                                                                                       # labels = c("0.00 - 0.40", "0.41 - 0.80", "0.81 - 1.20",
+                                                                                       #            "1.21 - 1.50", "1.51 - 2.00", "2.01 - 2.50",
+                                                                                       #            "2.51 - 3.00", "3.01 - 3.50", "> 3.50")
+                                                                                       labels = labels_plot
+                             )), color = NA) +
+          ggplot2::scale_fill_viridis_d(drop = F, name = "Density\n(ind/km2)", #\naveraged between days,\nmedian between simulation)"
           ) +
-          labs(title = ifelse(groupsizes,
-                              # paste0("Model ", i, ": predictions multiplied by\naverage groupsize per SCANS-IV block"),
-                              paste0("Model ", i, ": predictions"),
-                              paste0("Model ", i, ": predictions")))
+          ggplot2::labs(title = ifelse(groupsizes,
+                                       # paste0("Model ", i, ": predictions multiplied by\naverage groupsize per SCANS-IV block"),
+                                       paste0("Model ", i, ": predictions"),
+                                       paste0("Model ", i, ": predictions")))
 
         print(p1)
 
-        p2 <- ggplot() +
-          geom_sf(data = pred_grid_cent %>%
-                    # dplyr::filter(!is.na(Avg_density)) %>%
-                    left_join(summary_abund_percell %>%
-                                dplyr::mutate(CVma = CVmm) %>%
-                                dplyr::select(id, CVma, CVaa),
-                              by = "id") %>%
-                    dplyr::filter(!is.na(CVaa)), aes(fill = cut(CVaa,
-                                                                # breaks = c(-1, seq(.1, 1, .1), 2, Inf),
-                                                                breaks = c(-1, 0.1, 0.25, .5, 1, 1.5, 2, Inf),
-                                                                # labels = c("0.00 - 0.10", "0.11 - 0.20", "0.21 - 0.30",
-                                                                #            "0.31 - 0.40", "0.41 - 0.50", "0.51 - 0.60",
-                                                                #            "0.61 - 0.70", "0.71 - 0.80", "0.81 - 0.90",
-                                                                #            "0.91 - 1.00", "1.01 - 2.00", "> 2.00")
-                                                                labels = c("0.00 - 0.10", "0.11 - 0.25", "0.26 - 0.50", "0.51 - 1.00",
-                                                                           "1.01 - 1.50",
-                                                                           "1.51 - 2.00", "> 2.00"))), color = NA) +
-          scale_fill_viridis_d(name = "CV", drop = F) +
-          labs(title = paste0("Model ", i, ": CV"))
+        p2 <- ggplot2::ggplot() +
+          ggplot2::geom_sf(data = pred_grid_cent %>%
+                             # dplyr::filter(!is.na(Avg_density)) %>%
+                             left_join(summary_abund_percell %>%
+                                         dplyr::mutate(CVma = CVmm) %>%
+                                         dplyr::select(id, CVma, CVaa),
+                                       by = "id") %>%
+                             dplyr::filter(!is.na(CVaa)), ggplot2::aes(fill = cut(CVaa,
+                                                                                  # breaks = c(-1, seq(.1, 1, .1), 2, Inf),
+                                                                                  breaks = c(-1, 0.1, 0.25, .5, 1, 1.5, 2, Inf),
+                                                                                  # labels = c("0.00 - 0.10", "0.11 - 0.20", "0.21 - 0.30",
+                                                                                  #            "0.31 - 0.40", "0.41 - 0.50", "0.51 - 0.60",
+                                                                                  #            "0.61 - 0.70", "0.71 - 0.80", "0.81 - 0.90",
+                                                                                  #            "0.91 - 1.00", "1.01 - 2.00", "> 2.00")
+                                                                                  labels = c("0.00 - 0.10", "0.11 - 0.25", "0.26 - 0.50", "0.51 - 1.00",
+                                                                                             "1.01 - 1.50",
+                                                                                             "1.51 - 2.00", "> 2.00"))), color = NA) +
+          ggplot2::scale_fill_viridis_d(name = "CV", drop = F) +
+          ggplot2::labs(title = paste0("Model ", i, ": CV"))
 
         if (any(summary_abund_percell$Max == Inf)) {
           # pkg::fun(ggnewscale)
@@ -1534,14 +1560,14 @@ model_comparison <- function(run_models, # output from run_all_DSM
             dplyr::filter(Max == Inf)
 
           p2 <- p2 +
-            new_scale_fill() +
-            geom_sf(data = pred_grid_cent %>%
-                      dplyr::filter(id %in% infvalue$id) %>%
-                      left_join(infvalue %>%
-                                  dplyr::select(id, Max),
-                                by = "id") %>%
-                      dplyr::mutate(Infinite_value = ""), aes(fill = factor(Infinite_value)), color = NA) +
-            scale_fill_manual(values = "red", name = paste0(nrow(infvalue), " cells with an\ninfinite value\nin one of\nthe simulations~days"))
+            ggnewscale::new_scale_fill() +
+            ggplot2::geom_sf(data = pred_grid_cent %>%
+                               dplyr::filter(id %in% infvalue$id) %>%
+                               left_join(infvalue %>%
+                                           dplyr::select(id, Max),
+                                         by = "id") %>%
+                               dplyr::mutate(Infinite_value = ""), ggplot2::aes(fill = factor(Infinite_value)), color = NA) +
+            ggplot2::scale_fill_manual(values = "red", name = paste0(nrow(infvalue), " cells with an\ninfinite value\nin one of\nthe simulations~days"))
         }
 
         print(p2)
@@ -1549,14 +1575,21 @@ model_comparison <- function(run_models, # output from run_all_DSM
         test <- pred_grid_cent %>%
           left_join(bias_percell, by = "id")
 
-        bias_plot <- ggplot() +
-          geom_sf(data = test , aes(fill = bias), color = NA) +
-          scale_fill_viridis_c(name = "Bias") +
-          labs(title = paste0("Model ", i, ": Bias"))
+        bias_plot <- ggplot2::ggplot() +
+          ggplot2::geom_sf(data = test , ggplot2::aes(fill = bias), color = NA) +
+          ggplot2::scale_fill_viridis_c(name = "Bias") +
+          ggplot2::labs(title = paste0("Model ", i, ": Bias"))
 
         print(bias_plot)
       }
     })
+
+    rmd_text <- c(
+      rmd_text,
+      "```{r CV_abund_pred, echo=FALSE, eval=TRUE, results='asis'}",
+      paste(deparse(chunk_bias), collapse = "\n"),
+      "```"
+    )
   }
 
   # Write Rmd file
@@ -1568,11 +1601,11 @@ model_comparison <- function(run_models, # output from run_all_DSM
   rmarkdown::render(
     # input = file_name,
     input = tmp_md,
-    output_file = paste0(getwd(), "/", output_file, ".html"),
-    quiet = TRUE
+    output_file = paste0(prediction_folder, "/", output_file, ".html"),
+    quiet = F
   )
 
-  message("HTML report generated: ", paste0(getwd(), "/", output_file, ".html"))
-  browseURL(paste0(getwd(), "/", output_file, ".html"))
-  invisible(paste0(getwd(), "/", output_file, ".html"))
+  message("HTML report generated: ", paste0(prediction_folder, "/", output_file, ".html"))
+  browseURL(paste0(prediction_folder, "/", output_file, ".html"))
+  invisible(paste0(prediction_folder, "/", output_file, ".html"))
 }

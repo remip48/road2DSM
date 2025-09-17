@@ -139,7 +139,7 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
     as.data.frame()
 
   ls <- list.files(grid_folder)
-  ls <- ls[!str_detect(ls, fixed(static_grid)) & str_detect(ls, fixed("grid"))]
+  ls <- ls[!str_detect(ls, fixed(static_grid)) & str_detect(ls, fixed("grid")) & str_detect(ls, fixed(".rds"))]
   ls <- do.call("c", lapply(ls, function(l) {
     date <- str_remove_all(dplyr::last(str_split_1(l, "_")), fixed(".rds"))
     if (any(str_detect(date, fixed(filter_year_month_not_in)))) {
