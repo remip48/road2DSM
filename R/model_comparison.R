@@ -375,7 +375,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
                           "_average_predictions.gpkg")) | run_all) {
 
     cl <- parallel::makeCluster(n_cores, outfile = outfile)
-    registerDoParallel(cl)
+    doParallel::registerDoParallel(cl)
 
     run <- foreach::foreach(f = ls,
                             .packages = c("sf", "dplyr", "purrr", "stringr", "lubridate"),
@@ -905,7 +905,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
             st_cast("MULTIPOLYGON")
 
           cl <- parallel::makeCluster(min(c(length(unique(hp$Name)), parallel::detectCores() - 1)), outfile = "log.txt")
-          registerDoParallel(cl)
+          doParallel::registerDoParallel(cl)
 
           perHP <- do.call("rbind", foreach::foreach(n = unique(hp$Name),
                                                      .packages = c("dplyr", "sf"),
@@ -998,7 +998,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
           if (!file.exists(paste0(GridDir, "/", version_preds, "_for_uncertainties.RData")) | run_all) {
             cl <- parallel::makeCluster(parallel::detectCores() - 1)
-            registerDoParallel(cl)
+            doParallel::registerDoParallel(cl)
 
             to_pred <- (foreach(d = dd,
                                 .packages = c("sf", "dplyr"),
@@ -1069,7 +1069,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
             cat("Parallel processing with", n_cores, "for pseudo-posterior distribution estimate.\n")
 
             cl <- parallel::makeCluster(n_cores)
-            registerDoParallel(cl)
+            doParallel::registerDoParallel(cl)
 
             theta <- beta(fitted_model = gam_mod, n_sim = 1e3)
 
@@ -1083,7 +1083,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
             gc()
 
             cl <- parallel::makeCluster(floor(parallel::detectCores() / 4))
-            registerDoParallel(cl)
+            doParallel::registerDoParallel(cl)
 
             allpred <- foreach(l = allX,
                                .noexport = ls()[!(ls() %in% c("theta"))]) %dopar% { return(exp(l %*% t(theta))) }
@@ -1141,7 +1141,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
           cat("Parallel processing with", ceiling(n_cores / 2), "for BIAS estimate and correction.\n")
           clust <- parallel::makeCluster(ceiling(n_cores / 2))
-          registerDoParallel(clust)
+          doParallel::registerDoParallel(clust)
 
           per_cell <- (foreach(sim = 1:n,
                                .packages = c("dplyr", "purrr"),
