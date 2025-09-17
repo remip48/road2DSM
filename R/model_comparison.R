@@ -1053,7 +1053,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
             })
 
-            stopCluster(cl)
+            parallel::stopCluster(cl)
             gc()
 
             parallel <- T
@@ -1082,7 +1082,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
                               return(predict.gam(gam_mod, newdata = X, type = "lpmatrix"))
                             }
 
-            stopCluster(cl)
+            parallel::stopCluster(cl)
             gc()
 
             cl <- parallel::makeCluster(floor(parallel::detectCores() / 4))
@@ -1091,7 +1091,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
             allpred <- foreach(l = allX,
                                .noexport = ls()[!(ls() %in% c("theta"))]) %dopar% { return(exp(l %*% t(theta))) }
 
-            stopCluster(cl)
+            parallel::stopCluster(cl)
             rm(theta)
             rm(allX)
             rm(to_pred)
@@ -1174,7 +1174,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
           )
           per_cell <- do.call("rbind", per_cell)
 
-          stopCluster(clust)
+          parallel::stopCluster(clust)
           gc()
 
           if (!is.null(sub_area_analysis_file)) {
