@@ -9,6 +9,9 @@
 #' @param country
 #'
 #' @return
+#' @importFrom foreach %dopar%
+#' @importFrom foreach foreach
+#'
 #' @export
 #'
 #' @examples

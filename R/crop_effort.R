@@ -7,6 +7,9 @@
 #' @param keep
 #'
 #' @return
+#' @importFrom foreach %dopar%
+#' @importFrom foreach foreach
+#'
 #' @export
 #'
 #' @examples

@@ -11,6 +11,9 @@
 #' @param Pvalue_max
 #'
 #' @return
+#' @importFrom foreach %dopar%
+#' @importFrom foreach foreach
+#'
 #' @export
 #'
 #' @examples

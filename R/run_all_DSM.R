@@ -37,6 +37,9 @@
 #' @param fit_models
 #'
 #' @return
+#' @importFrom foreach %dopar%
+#' @importFrom foreach foreach
+#'
 #' @export
 #'
 #' @examples

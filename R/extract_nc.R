@@ -18,6 +18,9 @@
 #' @param Number_starting_name_file_set
 #'
 #' @return
+#' @importFrom foreach %dopar%
+#' @importFrom foreach foreach
+#'
 #' @export
 #'
 #' @examples
