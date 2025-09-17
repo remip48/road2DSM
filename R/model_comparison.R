@@ -203,7 +203,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
   })
   ##############
   chunk_best_models <- quote({
-    kable(run_models$all_fits_binded[1:length(run_models$best_models), ] %>%
+    knitr::kable(run_models$all_fits_binded[1:length(run_models$best_models), ] %>%
             dplyr::select(-c(index, ResDev, NulDev, Convergence)) %>%
             dplyr::mutate(model = 1:n(),
                           stacking_weights = round(stacking_weights, 3),
@@ -496,7 +496,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
   ##############
   run_preds_chunk <- quote({
-    kable(data.frame(date = sort(dates)) %>%
+    knitr::kable(data.frame(date = sort(dates)) %>%
             dplyr::mutate(Year = as.character(lubridate::year(date))) %>%
             group_by(Year) %>%
             dplyr::summarise(From = min(date),
@@ -801,7 +801,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
       gp_print <- gp_print %>%
         dplyr::mutate(mean = round(mean, 2), SD = round(SD, 2))
       colnames(gp_print) <- c("Block", "Number of groups", "Mean groupsize", "Median groupsize", "SD groupsize", "Maximum groupsize")
-      print(kable(gp_print, caption = "Groupsizes"))
+      print(knitr::kable(gp_print, caption = "Groupsizes"))
     }
   })
 
@@ -1292,7 +1292,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
         # colnames(summary_abund)[colnames(summary_abund) == "median_abundance"] <- "Abundance"
         colnames(summary_abund)[colnames(summary_abund) == "mean_abundance"] <- "Abundance"
 
-        print(kable(summary_abund, caption = "Non-biased final abundance estimates:"))
+        print(knitr::kable(summary_abund, caption = "Non-biased final abundance estimates:"))
 
         print(ggplot2::ggplot() +
                 ggplot2::geom_histogram(data = #summary_abundi %>%
@@ -1401,7 +1401,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
           colnames(summary_abund_HP)[colnames(summary_abund_HP) == "mean_abundance"] <- "Abundance"
 
-          print(kable(summary_abund_HP))
+          print(knitr::kable(summary_abund_HP))
 
           print(ggplot2::ggplot() +
                   ggplot2::geom_histogram(data = #summary_abund_HPi %>%
