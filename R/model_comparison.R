@@ -374,7 +374,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
   if (!file.exists(paste0(prediction_folder, "/", response, "/", version_preds,
                           "_average_predictions.gpkg")) | run_all) {
 
-    cl <- makeCluster(n_cores, outfile = outfile)
+    cl <- parallel::makeCluster(n_cores, outfile = outfile)
     registerDoParallel(cl)
 
     run <- foreach::foreach(f = ls,
@@ -904,7 +904,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
             st_transform(crs = 3035) %>%
             st_cast("MULTIPOLYGON")
 
-          cl <- makeCluster(min(c(length(unique(hp$Name)), parallel::detectCores() - 1)), outfile = "log.txt")
+          cl <- parallel::makeCluster(min(c(length(unique(hp$Name)), parallel::detectCores() - 1)), outfile = "log.txt")
           registerDoParallel(cl)
 
           perHP <- do.call("rbind", foreach::foreach(n = unique(hp$Name),
@@ -997,7 +997,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
           # source(paste0(WorkDir_CV, "SCANS-IV_model", "/08_OSPAR_Matthieu_CV_estimate/20211105_FctPredictions.R"))
 
           if (!file.exists(paste0(GridDir, "/", version_preds, "_for_uncertainties.RData")) | run_all) {
-            cl <- makeCluster(parallel::detectCores() - 1)
+            cl <- parallel::makeCluster(parallel::detectCores() - 1)
             registerDoParallel(cl)
 
             to_pred <- (foreach(d = dd,
@@ -1068,7 +1068,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
             n_cores <- ceiling(n_cores / 4)
             cat("Parallel processing with", n_cores, "for pseudo-posterior distribution estimate.\n")
 
-            cl <- makeCluster(n_cores)
+            cl <- parallel::makeCluster(n_cores)
             registerDoParallel(cl)
 
             theta <- beta(fitted_model = gam_mod, n_sim = 1e3)
@@ -1082,7 +1082,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
             stopCluster(cl)
             gc()
 
-            cl <- makeCluster(floor(parallel::detectCores() / 4))
+            cl <- parallel::makeCluster(floor(parallel::detectCores() / 4))
             registerDoParallel(cl)
 
             allpred <- foreach(l = allX,
@@ -1140,7 +1140,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
           })
 
           cat("Parallel processing with", ceiling(n_cores / 2), "for BIAS estimate and correction.\n")
-          clust <- makeCluster(ceiling(n_cores / 2))
+          clust <- parallel::makeCluster(ceiling(n_cores / 2))
           registerDoParallel(clust)
 
           per_cell <- (foreach(sim = 1:n,
