@@ -234,7 +234,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
   )
 
   for (i in 1:length(run_models$best_models)) {
-    chunk_modeli <- quote({
+    chunk_modeli_p1 <- quote({
       print(summary(run_models$best_models[[i]]))
       if (str_detect(as.character(run_models$best_models[[i]]$formula)[3], fixed("bs = \"so\", xt = list(bnd = bnd)"))) {
         (plot(run_models$best_models[[i]], select = 1))
@@ -243,10 +243,19 @@ model_comparison <- function(run_models, # output from run_all_DSM
         print(gratia::draw(run_models$best_models4plotting[[i]], rug = F))
       }
       mgcv::qq.gam(run_models$best_models4plotting[[i]], rep = 1000)
+    })
 
-      cat("\n\n#### ASPE & Ratio of the number of observed", ifelse(str_detect(response, "group"), "groups", "individuals"),
-          "/ number of predicted", ifelse(str_detect(response, "group"), "groups", "individuals"), "\n")
+    rmd_text <- c(
+      rmd_text,
+      paste0("## Model", i),
+      paste0("```{r best_models_p1", i, ", echo=FALSE}"),
+      paste(deparse(chunk_modeli_p1), collapse = "\n"),
+      "```",
+      paste0("#### ASPE & Ratio of the number of observed", ifelse(str_detect(response, "group"), "groups", "individuals"),
+             "/ number of predicted", ifelse(str_detect(response, "group"), "groups", "individuals"))
+    )
 
+    chunk_modeli <- quote({
       p <- predict(run_models$best_models[[i]], newdata=calibdata, type='response')
       dens <-as.numeric(p)
       obs_n <- calibdata %>%
@@ -496,13 +505,13 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
   ##############
   run_preds_chunk <- quote({
-    knitr::kable(data.frame(date = sort(dates)) %>%
-            dplyr::mutate(Year = as.character(lubridate::year(date))) %>%
-            group_by(Year) %>%
-            dplyr::summarise(From = min(date),
-                             To = max(date)) %>%
-            ungroup(),
-          caption = "Dates used for prediction:")
+    print(knitr::kable(data.frame(date = sort(dates)) %>%
+                         dplyr::mutate(Year = as.character(lubridate::year(date))) %>%
+                         group_by(Year) %>%
+                         dplyr::summarise(From = min(date),
+                                          To = max(date)) %>%
+                         ungroup(),
+                       caption = "Dates used for prediction:"))
 
     to_runm_files <- paste0("model", na.omit(c(to_runmi, to_runm)))
 
@@ -823,6 +832,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
     rmd_text <- c(
       rmd_text,
+      "<br>",
       "### CV estimate",
       paste0("We have the predictions of abundance per grid cell (", nrow(static),
              "), per draw (", n, ") and per day (", length(unique(dates)),
