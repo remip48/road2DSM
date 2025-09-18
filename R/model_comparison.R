@@ -949,7 +949,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
             st_transform(crs = 3035) %>%
             st_cast("MULTIPOLYGON")
 
-          cl <- parallel::makeCluster(min(c(length(unique(hp$Name)), parallel::detectCores() - 1)), outfile = "log.txt")
+          cl <- parallel::makeCluster(min(c(length(unique(hp$Name)), parallel::detectCores() - 1)), outfile = outfile)
           doParallel::registerDoParallel(cl)
 
           perHP <- do.call("rbind", foreach::foreach(n = unique(hp$Name),
@@ -1544,7 +1544,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
                        dplyr::rename(CV = CVaa,
                                      Corrected_bias = bias) %>%
                        st_cast(),
-                     paste0(GridDir, "/", version_preds, "_biascorrected_results_Model_", i, ".shp"),
+                     paste0(GridDir, "/", version_preds, "_biascorrected_results_Model_", i, ".gpkg"),
                      append = F
                      #ifelse(run_all, FALSE, NA)
             )
