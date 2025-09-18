@@ -310,7 +310,7 @@ backward_selection <- function(variable,
                             knots = knots,
                             data = seg_data_init)
 
-  cat("\#nFinal model:\n",
+  cat("\nFinal model:\n",
       model,
       "\n")
 

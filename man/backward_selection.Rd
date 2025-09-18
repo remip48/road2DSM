@@ -19,6 +19,7 @@ backward_selection(
   offset_effort = "effort_km2",
   treshold_discrete = 25,
   max_correlation = 0.5,
+  nb_max_pred = Inf,
   Pvalue_max = 0.05
 )
 }
