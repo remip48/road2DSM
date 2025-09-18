@@ -181,7 +181,8 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
   ##############
   run_dsmextra_chunk <- quote({
     cat("\n\n<br><br>")
-    knitr::asis_output("#### variable used for gap analysis:", paste(variable, collapse = ", "), "\n\n")
+    knitr::asis_output("## variable used for gap analysis:")
+    cat("\n<br>", paste(variable, collapse = ", "), "\n\n")
     # cat("<br><br>\n\n")
 
     cat("Years present in calibration data:", paste0(sort(unique(seg_data$year)),
@@ -309,6 +310,8 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
                               ylim = c(min(static$Y), max(static$Y)),
                               expand = F))
 
+    cat("\n\n<br><br>")
+
     print(ggplot2::ggplot() +
             ggplot2::geom_sf(data = study_area, fill = "white", alpha = 0.1) +
             ggplot2::geom_sf(data = static_sf %>%
@@ -330,6 +333,8 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
             ggplot2::coord_sf(xlim = c(min(static$X), max(static$X)),
                               ylim = c(min(static$Y), max(static$Y)),
                               expand = F))
+
+    cat("\n\n<br><br>")
 
     print(ggplot2::ggplot() +
             ggplot2::geom_sf(data = study_area, fill = "white", alpha = 0.1) +
@@ -581,9 +586,11 @@ gap_analysis <- function(seg_data, # segments used for run_all_DSM. Should not b
     paste(deparse(setup_chunk), collapse = "\n"),
     "```",
     # "aaaa"
-    "``` {r obsn, echo = F, eval=TRUE, out.width = '300%', results='asis', fig.width = 15, fig.height = 15, fig.align = 'center'}", # , dpi = 100
+    "``` {r obsn, echo = F, eval=TRUE, out.width = '300%', results='asis', fig.width = 15, fig.height = 20, fig.align = 'center'}", # , dpi = 100
     paste(deparse(run_dsmextra_chunk), collapse = "\n"),
-    "```"
+    "```",
+    "",
+    ""
   )
 
   # Write Rmd file

@@ -829,10 +829,6 @@ model_comparison <- function(run_models, # output from run_all_DSM
   rmd_text <- c(
     rmd_text,
     "",
-    "```{r run_kable_dates, echo=FALSE}",
-    paste(deparse(run_preds_chunk_dates), collapse = "\n"),
-    "",
-    "```",
     "```{r run, echo=FALSE}",
     paste(deparse(run_preds_chunk), collapse = "\n"),
     "```",
@@ -842,10 +838,15 @@ model_comparison <- function(run_models, # output from run_all_DSM
     paste(deparse(rplot_chunk), collapse = "\n"),
     "```",
     "",
+    "```{r run_kable_dates, echo=FALSE}",
+    paste(deparse(run_preds_chunk_dates), collapse = "\n"),
+    "```",
+    "",
     "",
     "```{r abund_pred, echo=FALSE, results='asis'}",
     paste(deparse(rallplot_chunk), collapse = "\n"),
-    "```"
+    "```",
+    ""
   )
 
   if (correct_bias) {
