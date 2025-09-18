@@ -32,6 +32,7 @@ backward_selection <- function(variable,
                                offset_effort = "effort_km2",
                                treshold_discrete = 25,
                                max_correlation = .5,
+                               nb_max_pred = Inf,
                                Pvalue_max = .05) { # use actually the code from CoastalFutues
 
   covariates <- variable
@@ -228,9 +229,12 @@ backward_selection <- function(variable,
   }
 
   ### p values
-  while (any(table_var$pvalues > Pvalue_max)) {
+  while (any(table_var$pvalues > Pvalue_max) | nrow(table_var) > nb_max_pred) {
     print(table_var[nrow(table_var), ] %>%
             dplyr::select(-var))
+    if (all(table_var$pvalues <= Pvalue_max)) {
+      cat("All covariates are now significant: removing covariates to reach the maximum number of predictors allowed", paste0("(", nb_max_pred, ")\n"))
+    }
     cat("Removed    ---   ", nrow(table_var) - 1, "left\n")
 
     table_var <- table_var[-nrow(table_var), ]

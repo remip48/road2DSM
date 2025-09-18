@@ -1363,6 +1363,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
             pull(abundance)
 
           if (!("with_cp_perHP" %in% ls())) {
+            cat("\n\n\n")
             stop("Function must be re-run with 'run_all = TRUE' as sub_area was not included in this initial analysis. The analysis must there be recomputed.")
           }
 
