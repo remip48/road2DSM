@@ -1015,8 +1015,9 @@ model_comparison <- function(run_models, # output from run_all_DSM
         set.seed(11)
         gam_mod <- all_models$best_models[[for_model]]
         model <- gam_mod
-        covariates <- do.call("c", lapply(all_models$best_models[[i]]$smooth, function(s) {return(s$term)}))
-        covariates <- covariates[!(covariates %in% c("X", "Y"))]
+        # covariates <- do.call("c", lapply(all_models$best_models[[i]]$smooth, function(s) {return(s$term)}))
+        # covariates <- covariates[!(covariates %in% c("X", "Y"))]
+        covariates <- variable
         log1p_trans <- log1p_trans[log1p_trans %in% covariates]
         ls <- list.files(GridDir)
         ls <- ls[str_detect(ls, "_prediction_") & str_detect(ls, version_preds)]

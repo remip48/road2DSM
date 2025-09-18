@@ -159,12 +159,12 @@ backward_selection <- function(variable,
           to_rem %>%
             pull(var) %>%
             paste(., collapse = " / "), "(P:",
-          to_rem  %>%
-            pull(pvalues) %>%
-            paste(round(., 3), collapse = " / "), ", cor:", round(max(rho[match(to_rem %>%
-                                                                                  pull(var),
-                                                                                covariates), ]), 3),
-          ") removed   ---  ",
+          paste0(to_rem  %>%
+                   pull(pvalues) %>%
+                   round(., 3), ", cor:", round(max(rho[match(to_rem %>%
+                                                                pull(var),
+                                                              covariates), ]), 3),
+                 ") removed   ---  "),
           length(covariates) - 1, "left.\nRemoved:",
           paste(remove_v, collapse = ", "), "\n")
 
@@ -309,6 +309,10 @@ backward_selection <- function(variable,
                             family = mgcv::nb(),
                             knots = knots,
                             data = seg_data_init)
+
+  cat("\#nFinal model:\n",
+      model,
+      "\n")
 
   final_file <- list(n_best = 1,
 

@@ -759,14 +759,22 @@ segmentate <- function(effort,
 
   coords_sf <- effort %>%
     st_transform(crs = 3035) %>%
-    st_centroid() %>%
+    st_centroid()
+
+  coords_sf3035 <- coords_sf %>%
+    st_coordinates()
+
+  coords_sf <- coords_sf %>%
     st_transform(crs = 4326) %>%
     st_coordinates()
 
   effort <- effort %>%
     mutate(lon_cent = coords_sf[,1],
            lat_cent = coords_sf[,2],
-           sf_length = units::drop_units(st_length(.)) / 1000)
+           X = coords_sf3035[,1],
+           Y = coords_sf3035[,2]#,
+           # sf_length = units::drop_units(st_length(.)) / 1000
+           )
 
   # summary(effort$sf_length)
   # hist(effort$sf_length)
