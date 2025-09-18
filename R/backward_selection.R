@@ -40,13 +40,20 @@ backward_selection <- function(variable,
   bnd <- soap$bnd
   knots <- soap$knots
 
+  if (!is.null(spline_to_add)) {
+    cat(spline_to_add, "will be added to the model, be values wont be scaled contrary to the predictors used in 'variable'.\n")
+  }
+
   seg_data <- seg_data %>%
     st_drop_geometry() %>%
     as.data.frame()
 
   seg_data_init <- seg_data %>%
-    dplyr::select(all_of(c(covariates, offset_effort)), ppho, X, Y) %>%
+    dplyr::select(all_of(c(covariates, offset_effort, response)), label) %>%
     tidyr::drop_na() %>%
+    left_join(seg_data %>%
+                dplyr::select(-all_of(c(covariates, offset_effort, response))),
+              by = "label") %>%
     as.data.frame()
 
   seg_data_scale <- seg_data_init
@@ -76,11 +83,11 @@ backward_selection <- function(variable,
                          ""),
                   # paste(paste0("s(", covariates, ", bs = 'cs', k = 10)"), collapse = " + "),
                   paste(smoother(variable = covariates, bs = bs, complexity = complexity), collapse = " + "),
-                  ifelse(!is.null(offset_effort),
-                         paste0("+ offset(I(log(", offset_effort, ")))"),
-                         ""),
                   ifelse(!is.null(spline_to_add),
                          paste0(" + ", spline_to_add),
+                         ""),
+                  ifelse(!is.null(offset_effort),
+                         paste0("+ offset(I(log(", offset_effort, ")))"),
                          ""))
 
   # cat(model)
