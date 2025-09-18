@@ -1362,6 +1362,10 @@ model_comparison <- function(run_models, # output from run_all_DSM
           final_abund_mgcv <- final_abund_mgcvi %>%
             pull(abundance)
 
+          if (!("with_cp_perHP" %in% ls())) {
+            stop("Function must be re-run with 'run_all = TRUE' as sub_area was not included in this initial analysis. The analysis must there be recomputed.")
+          }
+
           summary_abund_HPi <- with_cp_perHP %>%
             group_by(simulation, AU) %>%
             dplyr::summarise(median = median(Abundance, na.rm = T),
