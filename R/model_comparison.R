@@ -228,7 +228,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
     "``` {r obsn, echo = F, results='asis'}",
     paste(deparse(obsn_chunk), collapse = "\n"),
     "```",
-    "```{r best_models, echo=FALSE}",
+    "```{r best_models_i, echo=FALSE}",
     paste(deparse(chunk_best_models), collapse = "\n"),
     "```"
   )
@@ -253,8 +253,8 @@ model_comparison <- function(run_models, # output from run_all_DSM
       paste(deparse(chunk_modeli_p1), collapse = "\n"),
       "```",
       "",
-      paste0("#### ASPE & Ratio of the number of observed", ifelse(str_detect(response, "group"), "groups", "individuals"),
-             "/ number of predicted", ifelse(str_detect(response, "group"), "groups", "individuals"))
+      paste0("#### ASPE & Ratio of the number of observed ", ifelse(str_detect(response, "group"), "groups", "individuals"),
+             " / number of predicted ", ifelse(str_detect(response, "group"), "groups", "individuals"))
     )
 
     chunk_modeli <- quote({
@@ -267,7 +267,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
       ratio <- obs_n/dens
 
-      summary(ratio)
+      print(summary(ratio))
 
       print(ggplot2::ggplot() +
               ggplot2::geom_histogram(data = data.frame(Ratio = ratio) %>%
@@ -506,6 +506,16 @@ model_comparison <- function(run_models, # output from run_all_DSM
   sp <- last(str_split_1(response, "_"))
 
   ##############
+  run_preds_chunk_dates <- quote({
+    knitr::kable(data.frame(date = sort(dates)) %>%
+                    dplyr::mutate(Year = as.character(lubridate::year(date))) %>%
+                    group_by(Year) %>%
+                    dplyr::summarise(From = min(date),
+                                     To = max(date)) %>%
+                    ungroup(),
+                  caption = "Dates used for prediction:")
+    })
+
   run_preds_chunk <- quote({
     (knitr::kable(data.frame(date = sort(dates)) %>%
                          dplyr::mutate(Year = as.character(lubridate::year(date))) %>%
@@ -819,13 +829,19 @@ model_comparison <- function(run_models, # output from run_all_DSM
   rmd_text <- c(
     rmd_text,
     "",
+    "```{r run_kable_dates, echo=FALSE}",
+    paste(deparse(run_preds_chunk_dates), collapse = "\n"),
+    "",
+    "```",
     "```{r run, echo=FALSE}",
     paste(deparse(run_preds_chunk), collapse = "\n"),
     "```",
     "",
+    "",
     "```{r plots_pred, echo=FALSE, out.width = '1500px', out.height = '700px'}",
     paste(deparse(rplot_chunk), collapse = "\n"),
     "```",
+    "",
     "",
     "```{r abund_pred, echo=FALSE, results='asis'}",
     paste(deparse(rallplot_chunk), collapse = "\n"),
@@ -841,6 +857,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
     rmd_text <- c(
       rmd_text,
       "",
+      "",
       "## CV estimate and bias-correction",
       "",
       paste0("We have the predictions of abundance per grid cell (", nrow(static),
@@ -855,6 +872,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
       "* For the estimates of CV per cell:",
       "   1.	We average the daily abundance per cell and draw",
       "   2.	We calculate the mean & SD in this pseudo-posterior distribution of cell abundances",
+      "",
       "",
       ""
     )
