@@ -247,10 +247,12 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
     rmd_text <- c(
       rmd_text,
-      paste0("## Model", i),
+      "",
+      paste0("## Model ", i),
       paste0("```{r best_models_p1", i, ", echo=FALSE}"),
       paste(deparse(chunk_modeli_p1), collapse = "\n"),
       "```",
+      "",
       paste0("#### ASPE & Ratio of the number of observed", ifelse(str_detect(response, "group"), "groups", "individuals"),
              "/ number of predicted", ifelse(str_detect(response, "group"), "groups", "individuals"))
     )
@@ -505,7 +507,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
   ##############
   run_preds_chunk <- quote({
-    print(knitr::kable(data.frame(date = sort(dates)) %>%
+    (knitr::kable(data.frame(date = sort(dates)) %>%
                          dplyr::mutate(Year = as.character(lubridate::year(date))) %>%
                          group_by(Year) %>%
                          dplyr::summarise(From = min(date),
@@ -816,12 +818,15 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
   rmd_text <- c(
     rmd_text,
+    "",
     "```{r run, echo=FALSE}",
     paste(deparse(run_preds_chunk), collapse = "\n"),
     "```",
+    "",
     "```{r plots_pred, echo=FALSE, out.width = '1500px', out.height = '700px'}",
     paste(deparse(rplot_chunk), collapse = "\n"),
     "```",
+    "",
     "```{r abund_pred, echo=FALSE, results='asis'}",
     paste(deparse(rallplot_chunk), collapse = "\n"),
     "```"
@@ -830,20 +835,28 @@ model_comparison <- function(run_models, # output from run_all_DSM
   if (correct_bias) {
     n <- 1000
 
+    cat("Parallel processing with", ceiling(n_cores / 4), "for pseudo-posterior distribution estimate.\n")
+    cat("Parallel processing with", ceiling(ceiling(n_cores / 4) / 2), "for BIAS estimate and correction.\n")
+
     rmd_text <- c(
       rmd_text,
-      "<br>",
-      "### CV estimate",
+      "",
+      "## CV estimate and bias-correction",
+      "",
       paste0("We have the predictions of abundance per grid cell (", nrow(static),
              "), per draw (", n, ") and per day (", length(unique(dates)),
              "). For the estimates of CV and abundances presented in this section, we follow the method:"),
+      "",
       "* For the estimates of total abundance:",
-      "1.	We sum the cells per day and per draw",
-      "2.	We average the daily abundances per simulation",
-      "3.	We calculate the mean & SD in this pseudo-posterior distribution",
+      "   1.	We sum the cells per day and per draw",
+      "   2.	We average the daily abundances per simulation",
+      "   3.	We calculate the mean & SD in this pseudo-posterior distribution",
+      "",
       "* For the estimates of CV per cell:",
-      "1.	We average the daily abundance per cell and draw",
-      "2.	We calculate the mean & SD in this pseudo-posterior distribution of cell abundances"
+      "   1.	We average the daily abundance per cell and draw",
+      "   2.	We calculate the mean & SD in this pseudo-posterior distribution of cell abundances",
+      "",
+      ""
     )
 
     chunk_bias <- quote({
@@ -1079,7 +1092,6 @@ model_comparison <- function(run_models, # output from run_all_DSM
             }
 
             n_cores <- ceiling(n_cores / 4)
-            cat("Parallel processing with", n_cores, "for pseudo-posterior distribution estimate.\n")
 
             cl <- parallel::makeCluster(n_cores)
             doParallel::registerDoParallel(cl)
@@ -1152,7 +1164,6 @@ model_comparison <- function(run_models, # output from run_all_DSM
             return(out)
           })
 
-          cat("Parallel processing with", ceiling(n_cores / 2), "for BIAS estimate and correction.\n")
           clust <- parallel::makeCluster(ceiling(n_cores / 2))
           doParallel::registerDoParallel(clust)
 
@@ -1486,7 +1497,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
                         CVaa, CVam, CVma, CVmm, Max, mad, mad_med) %>%
           dplyr::rename(id = cell)
 
-        cat("\n<br>Sum of the cell abundances:", sum(summary_abund_percell$Abundance, na.rm = T), "inds\n<br>")
+        cat("\n<br>\n<br>\n<br>Sum of the cell abundances from the predictions below:", sum(summary_abund_percell$Abundance, na.rm = T), "inds\n<br>")
 
         pred_grid_cent <- static %>%
           dplyr::select(id, areakm2)
@@ -1495,13 +1506,13 @@ model_comparison <- function(run_models, # output from run_all_DSM
           mutate(id = cell)
 
         if (save_results_bias_corrected) {
-          if (file.exists(paste0(GridDir, "/", version_preds, "_biascorrected_results_Model_", i, ".shp")) & !run_all) {
-            cat("Model", i, ": File already exists! Results won't be saved.", paste0("(", GridDir, "/",
-                                                                                     version_preds, "_biascorrected_results_Model_", i, ".shp)"),
-                "\n")
-          } else {
-            cat("Saving bias-corrected results from Model", i, "under", paste0(GridDir, "/", version_preds, "_biascorrected_results_Model_", i, ".shp"),
-                "\n")
+          # if (file.exists(paste0(GridDir, "/", version_preds, "_biascorrected_results_Model_", i, ".shp")) & !run_all) {
+          #   # cat("Model", i, ": File already exists! Results won't be saved.", paste0("(", GridDir, "/",
+          #   #                                                                          version_preds, "_biascorrected_results_Model_", i, ".shp)"),
+          #   #     "\n")
+          # } else {
+            # cat("Saving bias-corrected results from Model", i, "under", paste0(GridDir, "/", version_preds, "_biascorrected_results_Model_", i, ".shp"),
+            #     "\n")
 
             write_sf(pred_grid_cent %>%
                        left_join(summary_abund_percell %>%
@@ -1517,7 +1528,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
                      append = F
                      #ifelse(run_all, FALSE, NA)
             )
-          }
+          # }
         }
 
         p1 <- ggplot2::ggplot() +
@@ -1545,6 +1556,8 @@ model_comparison <- function(run_models, # output from run_all_DSM
                                        paste0("Model ", i, ": predictions")))
 
         print(p1)
+
+        cat("\n<br>\n<br>")
 
         p2 <- ggplot2::ggplot() +
           ggplot2::geom_sf(data = pred_grid_cent %>%
@@ -1584,6 +1597,8 @@ model_comparison <- function(run_models, # output from run_all_DSM
         }
 
         print(p2)
+
+        cat("\n<br>\n<br>")
 
         test <- pred_grid_cent %>%
           left_join(bias_percell, by = "id")
