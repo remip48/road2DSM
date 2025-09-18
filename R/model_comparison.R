@@ -1535,7 +1535,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
             write_sf(pred_grid_cent %>%
                        left_join(summary_abund_percell %>%
-                                   dplyr::select(id, areakm2, Abundance, CVaa, Low95, Up95),
+                                   dplyr::select(id, Abundance, CVaa, Low95, Up95),
                                  by = "id") %>%
                        dplyr::filter(!is.na(CVaa)) %>%
                        dplyr::select(id, areakm2, Abundance, CVaa, Low95, Up95) %>%
