@@ -1542,7 +1542,8 @@ model_comparison <- function(run_models, # output from run_all_DSM
                        left_join(bias_percell %>%
                                    dplyr::select(id, bias), by = "id") %>%
                        dplyr::rename(CV = CVaa,
-                                     Corrected_bias = bias),
+                                     Corrected_bias = bias) %>%
+                       st_cast(),
                      paste0(GridDir, "/", version_preds, "_biascorrected_results_Model_", i, ".shp"),
                      append = F
                      #ifelse(run_all, FALSE, NA)
