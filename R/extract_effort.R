@@ -122,7 +122,8 @@ extract_effort <- function(effort,
         return(phy %>%
                  # dplyr::mutate(file_set = f) %>%
                  # st_simplify() %>%
-                 st_cast())
+                 st_cast() %>%
+                 st_transform(crs = st_crs(out)))
       } else {
         return(NULL)
       }

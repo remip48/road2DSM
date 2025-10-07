@@ -68,8 +68,8 @@ extract_grid <- function(grid,
   }
 
   write_sf(static %>%
-            st_cast(),
-          paste0(writing_directory, "/", today, "_static_grid.shp"))
+             st_cast(),
+           paste0(writing_directory, "/", today, "_static_grid.shp"))
 
   cat("Static grid saved under", paste0(writing_directory, "/", today, "_static_grid.shp"), "\n")
 
@@ -104,9 +104,9 @@ extract_grid <- function(grid,
   registerDoParallel(cl)
 
   extract <- foreach(d = sort(list_date),
-                     .noexport = ls()[!(ls() %in% c("grid", "variable", "writing_directory", "list_set",
+                     .noexport = ls()[!(ls() %in% c("grid", "variable", "writing_directory", "list_set", "max_lon",
                                                     "file_set_directory", "today", "try_to_combine_filetsets"))],
-                     .packages = c("sf", "dplyr", "stringr")
+                     .packages = c("sf", "dplyr", "stringr", "purrr")
   ) %dopar% {
     if (!file.exists(paste0(writing_directory, "/", today, "_grid_", d, ".rds"))) {
       cat(d, "\n")
@@ -164,7 +164,8 @@ extract_grid <- function(grid,
           return(phy %>%
                    # dplyr::mutate(file_set = f) %>%
                    # st_simplify() %>%
-                   st_cast())
+                   st_cast() %>%
+                   st_transform(crs = st_crs(out)))
         } else {
           return(NULL)
         }
@@ -191,7 +192,7 @@ extract_grid <- function(grid,
                                    floor(out_grid[[j]]$lon_cent*10^5)/10^5)) %in% unique(paste(floor(out_grid[[i]]$lat_cent*10^5)/10^5,
                                                                                                floor(out_grid[[i]]$lon_cent*10^5)/10^5)))) {
                 # if (all(out_grid[[i]]$lon_cent == out_grid[[j]]$lon_cent) &
-              #     all(out_grid[[i]]$lat_cent == out_grid[[j]]$lat_cent)) {
+                #     all(out_grid[[i]]$lat_cent == out_grid[[j]]$lat_cent)) {
 
                 out_grid[[i]] <- out_grid[[i]] %>%
                   dplyr::mutate(flon = floor(lon_cent*10^5), flat = floor(lat_cent*10^5)) %>%
@@ -205,25 +206,25 @@ extract_grid <- function(grid,
 
                 out_grid <- out_grid[-j]
                 # cat("Joined ")
-              # } else if (any(unique(paste(floor(out_grid[[i]]$lat_cent*10^5)/10^5,
-              #                             floor(out_grid[[i]]$lon_cent*10^5)/10^5)) %in% unique(paste(floor(out_grid[[i]]$lat_cent*10^5)/10^5,
-              #                                                                                         floor(out_grid[[i]]$lon_cent*10^5)/10^5)))) {
-              #   out_grid[[i]] <- out_grid[[i]] %>%
-              #     dplyr::mutate(flon = floor(lon_cent*10^5), flat = floor(lat_cent*10^5)) %>%
-              #     left_join(out_grid[[j]] %>%
-              #                 st_drop_geometry() %>%
-              #                 dplyr::mutate(flon = floor(lon_cent*10^5), flat = floor(lat_cent*10^5)) %>%
-              #                 dplyr::select(flon, flat, all_of(colnames(.)[!(colnames(.) %in% colnames(out_grid[[i]]))])),
-              #               by = c("flon", "flat")) %>%
-              #     dplyr::select(-c(flon, flat)) %>%
-              #     st_cast()
-              #
-              #   out_grid[[j]] <- out_grid[[j]] %>%
-              #     dplyr::filter(!(paste(floor(lat_cent*10^5)/10^5,
-              #                           floor(lon_cent*10^5)/10^5) %in% paste(floor(out_grid[[i]]$lat_cent*10^5)/10^5,
-              #                                                                 floor(out_grid[[i]]$lon_cent*10^5)/10^5)))
-              #
-              #   j <- j + 1
+                # } else if (any(unique(paste(floor(out_grid[[i]]$lat_cent*10^5)/10^5,
+                #                             floor(out_grid[[i]]$lon_cent*10^5)/10^5)) %in% unique(paste(floor(out_grid[[i]]$lat_cent*10^5)/10^5,
+                #                                                                                         floor(out_grid[[i]]$lon_cent*10^5)/10^5)))) {
+                #   out_grid[[i]] <- out_grid[[i]] %>%
+                #     dplyr::mutate(flon = floor(lon_cent*10^5), flat = floor(lat_cent*10^5)) %>%
+                #     left_join(out_grid[[j]] %>%
+                #                 st_drop_geometry() %>%
+                #                 dplyr::mutate(flon = floor(lon_cent*10^5), flat = floor(lat_cent*10^5)) %>%
+                #                 dplyr::select(flon, flat, all_of(colnames(.)[!(colnames(.) %in% colnames(out_grid[[i]]))])),
+                #               by = c("flon", "flat")) %>%
+                #     dplyr::select(-c(flon, flat)) %>%
+                #     st_cast()
+                #
+                #   out_grid[[j]] <- out_grid[[j]] %>%
+                #     dplyr::filter(!(paste(floor(lat_cent*10^5)/10^5,
+                #                           floor(lon_cent*10^5)/10^5) %in% paste(floor(out_grid[[i]]$lat_cent*10^5)/10^5,
+                #                                                                 floor(out_grid[[i]]$lon_cent*10^5)/10^5)))
+                #
+                #   j <- j + 1
               } else {
                 j <- j + 1
               }
@@ -259,24 +260,68 @@ extract_grid <- function(grid,
           }))
         }))
 
+        # cout <- out %>%
+        #   group_by() %>%
+        #   dplyr::summarise(do_union = F) %>%
+        #   st_make_valid()
+
+        # final <- lapply(out_grid, function(grid) {
+        #
+        #   cols_grid <- all_cols[all_cols %in% colnames(grid)]
+        #
+        #   return(grid[grid$Xmax >= bb[1] & grid$Xmin <= bb[3] &
+        #                 grid$Ymax >= bb[2] & grid$Ymin <= bb[4], ] %>%
+        #            dplyr::select(all_of(cols_grid)) %>%
+        #            # st_make_valid() %>%
+        #            # dplyr::filter(c(st_intersects(., cout, sparse = F))) %>%
+        #            st_intersection(., out) %>%
+        #            dplyr::mutate(area_km2 = as.numeric(st_area(.))) %>%
+        #            st_drop_geometry() %>%
+        #            dplyr::select(id, area_km2, all_of(cols_grid)) %>%
+        #            group_by(id) %>%
+        #            dplyr::summarise(across(all_of(cols_grid),
+        #                                    ~ (sum(.x * area_km2, na.rm = T) /
+        #                                         sum(area_km2[!is.na(.x)], na.rm = T)))
+        #            ) %>%
+        #            ungroup()
+        #   )
+        # })
+
         final <- lapply(out_grid, function(grid) {
 
           cols_grid <- all_cols[all_cols %in% colnames(grid)]
 
-          return(grid[grid$Xmax >= bb[1] & grid$Xmin <= bb[3] &
-                        grid$Ymax >= bb[2] & grid$Ymin <= bb[4], ] %>%
-                   dplyr::select(all_of(cols_grid)) %>%
-                   st_intersection(., out) %>%
-                   dplyr::mutate(area_km2 = as.numeric(st_area(.))) %>%
-                   st_drop_geometry() %>%
-                   dplyr::select(id, area_km2, all_of(cols_grid)) %>%
-                   group_by(id) %>%
-                   dplyr::summarise(across(all_of(cols_grid),
-                                           ~ (sum(.x * area_km2, na.rm = T) /
-                                                sum(area_km2[!is.na(.x)], na.rm = T)))
-                   ) %>%
-                   ungroup()
-          )
+          gridi <- grid[grid$Xmax >= bb[1] & grid$Xmin <= bb[3] &
+                          grid$Ymax >= bb[2] & grid$Ymin <= bb[4], ] %>%
+            st_make_valid()
+
+          # dl <- sort(unique(gridi$lon_cent))
+          # dl <- max(dl[-1] - dl[-length(dl)])
+
+          out <- map_dfr(unique(gridi$lon_cent), function(l) {
+            # print(match((l), unique(gridi$lon_cent)))
+
+            outi <- gridi[gridi$lon_cent == l, ]
+
+            return(outi %>%
+                     dplyr::select(all_of(cols_grid)) %>%
+                     # st_make_valid() %>%
+                     # dplyr::filter(c(st_intersects(., cout, sparse = F))) %>%
+                     st_intersection(., out[out$Xmax >= min(outi$Xmin) & out$Xmin <= max(outi$Xmax) &
+                                              out$Ymax >= min(outi$Ymin) & out$Ymin <= max(outi$Ymax), ]) %>%
+                     dplyr::mutate(area_km2 = as.numeric(st_area(.))) %>%
+                     st_drop_geometry() %>%
+                     dplyr::select(id, area_km2, all_of(cols_grid)) %>%
+                     group_by(id) %>%
+                     dplyr::summarise(across(all_of(cols_grid),
+                                             ~ (sum(.x * area_km2, na.rm = T) /
+                                                  sum(area_km2[!is.na(.x)], na.rm = T)))
+                     ) %>%
+                     ungroup())
+
+          })
+
+          return(out)
         })
 
         for (i in 1:length(final)) {
