@@ -13,6 +13,10 @@ extract_grid(
   writing_directory,
   try_to_combine_filetsets = T,
   dates,
+  n_steps_lon = ifelse(length(unique(grid$lon_cent)) >= (nrow(grid) * 3/4),
+    ceiling(sqrt(nrow(grid)))/2, length(unique(grid$lon_cent))/2),
+  n_steps_lat = ifelse(length(unique(grid$lat_cent)) >= (nrow(grid) * 3/4),
+    ceiling(sqrt(nrow(grid)))/2, length(unique(grid$lat_cent))/2),
   n_cores = NULL,
   outfile = "log.txt"
 )

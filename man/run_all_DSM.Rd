@@ -39,7 +39,6 @@ run_all_DSM(
   outfile = "logs.txt",
   first_try = F,
   first_try_AIC = F,
-  likelihood = "negbin",
   fit_models = T
 )
 }
@@ -47,5 +46,5 @@ run_all_DSM(
 \item{fit_models}{}
 }
 \description{
-with all combinations of covariates desired, and return AIC and LOO metrics if desired.
+with all combinations of covariates desired, and return AIC and LOO metrics if desired. Uses nb() family. Function should be modified otherwise.
 }

@@ -37,6 +37,7 @@ Imports:
     patchwork,
     purrr,
     raster,
+    readxl,
     rlang,
     rmapshaper,
     rmarkdown,
@@ -47,4 +48,5 @@ Imports:
     tidyr,
     timeDate,
     units,
-    viridis
+    viridis,
+    writexl

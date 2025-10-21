@@ -40,7 +40,7 @@ extract_effort <- function(effort,
   }
 
   list_set <- list.files(file_set_directory)
-  list_set <- list_set[str_detect(list_set, "file_set_")]
+  list_set <- list_set[str_detect(list_set, fixed("file_set_")) & !str_detect(list_set, fixed("."))]
   list_set <- list_set[!is.na(as.numeric(str_remove_all(list_set, fixed("file_set_"))))]
 
   effort$date <- as.character(effort$date)

@@ -25,8 +25,8 @@
 #'
 #' @examples
 extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
-                         all_time.period, dates, lonmin = -Inf, latmin = -Inf, lonmax = Inf,
-                         latmax = Inf, Number_starting_name_file_set = 1, n_cores = NULL, outfile = "log.txt")
+                        all_time.period, dates, lonmin = -Inf, latmin = -Inf, lonmax = Inf,
+                        latmax = Inf, Number_starting_name_file_set = 1, n_cores = NULL, outfile = "log.txt")
 {
   if (any(is.na(dates))) {
     stop("There is NA in the 'dates' object")
@@ -93,68 +93,164 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                  dt, ") is different from the NC file (", dt,
                                  ").\nFunction continues but stop it if you want to check.\n\n")
                            }
-                           return(nc_files[i, ] %>% dplyr::group_by(file, date_start,
-                                                                    date_end) %>% dplyr::reframe(variable = names))
+                           return(nc_files[i, ] %>%
+                                    dplyr::group_by(file, date_start,
+                                                    date_end) %>%
+                                    dplyr::reframe(variable = names))
                          })
   stopCluster(cl)
   gc()
-  list_variable <- nc_filesi %>% dplyr::filter(variable %in%
-                                                 list_variable) %>% dplyr::select(file, variable) %>%
-    distinct() %>% arrange(file) %>% group_by(variable) %>%
+  list_variable <- nc_filesi %>%
+    dplyr::filter(variable %in% list_variable) %>%
+    dplyr::select(file, variable) %>%
+    distinct() %>%
+    arrange(file) %>%
+    group_by(variable) %>%
     dplyr::summarise(allfile = paste(file, collapse = "///")) %>%
-    ungroup() %>% dplyr::mutate(file_set = paste0("file_set_",
-                                                  match(allfile, unique(allfile)) + Number_starting_name_file_set - 1)) %>% left_join(nc_filesi %>%
-                                                                                                                                        dplyr::select(file, variable) %>% distinct(), by = "variable",
-                                                                                                                                      relationship = "one-to-many") %>% dplyr::rename(file_id = file) %>%
+    ungroup() %>%
+    dplyr::mutate(file_set = paste0("file_set_", match(allfile, unique(allfile)) + Number_starting_name_file_set - 1)) %>%
+    left_join(nc_filesi %>%
+                dplyr::select(file, variable) %>%
+                distinct(),
+              by = "variable", relationship = "one-to-many") %>%
+    dplyr::rename(file_id = file) %>%
     dplyr::select(-allfile)
+
+  if (file.exists(paste0(nc.path, "/list_file_set.xlsx"))) {
+    list_sets <- readxl::read_xlsx(paste0(nc.path, "/list_file_set.xlsx"))
+
+    list_variablei <- list_variable
+
+    list_variable <- list_variable %>%
+      dplyr::select(-file_set) %>%
+      dplyr::left_join(list_sets, by = "file_id")
+
+    if (any(!(list_variable$file_id %in% list_sets$file_id))) {
+
+      for (i in 1:nrow(list_variable)) {
+        # print(i)
+
+        if (is.na(list_variable$file_set[i])) {
+
+          file_ref <- list_variablei %>%
+            dplyr::filter(file_set == list_variablei$file_set[i] & file_id != list_variable$file_id[i]) %>%
+            pull(file_id) %>%
+            unique()
+
+          rep <- list_variable %>%
+            dplyr::filter(file_id %in% file_ref & !is.na(file_set)) %>%
+            pull(file_set) %>%
+            unique()
+
+          if (length(rep) == 0) {
+            list_variable$file_set[i] <- paste0("file_set_",
+                                                (list_variable %>%
+                                                   pull(file_set) %>%
+                                                   str_remove_all(., fixed("file_set_")) %>%
+                                                   as.numeric() %>%
+                                                   max(., na.rm = T)) + 1)
+          } else {
+            list_variable$file_set[i] <- rep
+          }
+        }
+
+      }
+
+      writexl::write_xlsx(list_variable %>%
+                            dplyr::select(file_set, file_id) %>%
+                            rbind(list_sets  %>%
+                                    dplyr::select(file_set, file_id)) %>%
+                            dplyr::arrange(file_set, file_id) %>%
+                            dplyr::distinct(),
+                          paste0(nc.path, "/list_file_set.xlsx"))
+
+    }
+  } else {
+    writexl::write_xlsx(list_variable %>%
+                          dplyr::select(file_set, file_id) %>%
+                          dplyr::arrange(file_set, file_id) %>%
+                          dplyr::distinct(),
+                        paste0(nc.path, "/list_file_set.xlsx"))
+  }
+
   if (!("expr" %in% colnames(nc_files))) {
     nc_files$expr <- NA
   }
-  predtype_ref <- nc_files %>% dplyr::rename(file_id = file) %>%
-    left_join(list_variable %>% dplyr::select(file_set, file_id),
-              by = "file_id") %>% group_by(file_set) %>% dplyr::reframe(predtype = str_remove_all(str_split_1(unique(type),
-                                                                                                              fixed(",")), " "), expr = unique(expr)) %>% as.data.frame()
+
+  predtype_ref <- nc_files %>%
+    dplyr::rename(file_id = file) %>%
+    left_join(list_variable %>%
+                dplyr::select(file_set, file_id),
+              by = "file_id") %>%
+    group_by(file_set) %>%
+    dplyr::reframe(predtype = str_remove_all(str_split_1(unique(type), fixed(",")), " "), expr = unique(expr)) %>%
+    as.data.frame()
+
   ncinfoi_ref <- map_dfr(unique(list_variable$variable), function(i) {
     return(list_variable %>% dplyr::filter(variable == i) %>%
              left_join(nc_files, by = c(file_id = "file")) %>%
-             dplyr::rename(nc.name = file_id) %>% dplyr::select(nc.name,
-                                                                variable, file_set, date_start, date_end) %>% arrange(date_start) %>%
+             dplyr::rename(nc.name = file_id) %>%
+             dplyr::select(nc.name, variable, file_set, date_start, date_end) %>%
+             arrange(date_start) %>%
              dplyr::mutate(period = 1:n() - 1))
   }) %>% distinct()
+
   datesi <- data.frame(dates = dates)
+
   for (f in unique(list_variable$file_set)) {
-    pred.type <- predtype_ref %>% dplyr::filter(file_set ==
-                                                  f) %>% pull(predtype)
-    variable <- list_variable %>% dplyr::filter(file_set ==
-                                                  f) %>% pull(variable) %>% unique()
-    cat("Run NC", f, paste0("(", ifelse(length(variable) ==
-                                          1, "variable: ", "variables: "), paste(variable,
-                                                                                 collapse = ", "), ") as"), paste(pred.type, collapse = ", "),
+    pred.type <- predtype_ref %>%
+      dplyr::filter(file_set == f) %>%
+      pull(predtype)
+
+    variable <- list_variable %>%
+      dplyr::filter(file_set == f) %>%
+      pull(variable) %>%
+      unique()
+
+    cat("Run NC", f, paste0("(", ifelse(length(variable) == 1, "variable: ", "variables: "),
+                            paste(variable, collapse = ", "), ") as"),
+        paste(pred.type, collapse = ", "),
         "\n")
-    ncinfoi <- ncinfoi_ref %>% dplyr::filter(file_set ==
-                                               f)
-    dates <- datesi %>% group_by(dates) %>% dplyr::mutate(period = if (any(ncinfoi$date_start <=
-                                                                           unique(dates) & ncinfoi$date_end >= unique(dates))) {
-      ncinfoi %>% dplyr::filter(date_start <= unique(dates) & date_end >=
-                                  unique(dates)) %>% dplyr::pull(period) %>% unique()
-    }
+
+    ncinfoi <- ncinfoi_ref %>% dplyr::filter(file_set == f)
+
+    dates <- datesi %>%
+      group_by(dates) %>%
+      dplyr::mutate(period = if (any(ncinfoi$date_start <= unique(dates) & ncinfoi$date_end >= unique(dates))) {
+
+        ncinfoi %>%
+          dplyr::filter(date_start <= unique(dates) & date_end >= unique(dates)) %>%
+          dplyr::pull(period) %>%
+          unique()
+      }
+
     else {
-      NA
-    }) %>% ungroup()
+
+       NA
+
+    }) %>%
+      ungroup()
+
     infos_dim <- map_dfr(1:nrow(ncinfoi), function(i) {
       v <- nc_open(paste(nc.path, ncinfoi$nc.name[i], sep = "/"))$var
-      out <- ncinfoi[i, ] %>% left_join(map_dfr(v, function(x) {
-        map_dfr(x$dim, function(d) {
-          return(data.frame(variable = x$name, dim = d$name,
-                            n_values = length(d$vals)))
-        })
-      }) %>% dplyr::mutate(nc.name = ncinfoi$nc.name[i]),
-      by = c("nc.name", "variable")) %>% ungroup()
+
+      out <- ncinfoi[i, ] %>%
+        left_join(map_dfr(v, function(x) {
+          map_dfr(x$dim, function(d) {
+            return(data.frame(variable = x$name, dim = d$name,
+                              n_values = length(d$vals)))
+          })
+        }) %>%
+          dplyr::mutate(nc.name = ncinfoi$nc.name[i]),
+        by = c("nc.name", "variable")) %>%
+        ungroup()
       return(out)
+
     })
+
     if (!file.exists(paste0(nc.path, "/", f, ".shp"))) {
-      datafile <- paste(nc.path, first(ncinfoi$nc.name[ncinfoi$file_set ==
-                                                         f]), sep = "/")
+
+      datafile <- paste(nc.path, first(ncinfoi$nc.name[ncinfoi$file_set == f]), sep = "/")
       nc.data <- nc_open(datafile)
       namedims <- names(nc.data$dim)
       lat <- ncvar_get(nc.data, namedims[str_detect(namedims,
@@ -485,9 +581,12 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
             #                dplyr::filter(t == 1), aes(x = lon, y = lat), size = .1) +
             #   geom_point(data = data, aes(x = lon_cent, y = lat_cent), color = "red", size = .1)
 
-            if (any(!(unique(paste(floor(data$lat_cent*10^5)/10^5,
+            if (!(all(unique(paste(floor(data$lat_cent*10^5)/10^5,
                                    floor(data$lon_cent*10^5)/10^5)) %in% unique(paste(floor(data.var_ref$lat*10^5)/10^5,
-                                                                                      floor(data.var_ref$lon*10^5)/10^5))))) {
+                                                                                      floor(data.var_ref$lon*10^5)/10^5))) |
+                  all(unique(paste(floor(data.var_ref$lat_cent*10^5)/10^5,
+                                   floor(data.var_ref$lon_cent*10^5)/10^5)) %in% unique(paste(floor(data$lat*10^5)/10^5,
+                                                                                              floor(data$lon*10^5)/10^5))))) {
               stop("lon or lat not in the data")
             }
 
@@ -576,8 +675,8 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
               outfinal <- map(all_time.period, function(time.period) {
                 # print(time.period)
                 if (time.period == 1) {
-                  outf <- outM[t %in% (max(all_time.period) -
-                                         time.period + 1):numtimes, -c("t")]
+                  outf <- outM[which(outM$t %in% (max(all_time.period) -
+                                                    time.period + 1):numtimes), -c("t")]
                   colnames(outf)[colnames(outf) %in%
                                    cols1] <- paste0(cols1, ".mean")
                   colnames(outf)[colnames(outf) %in%
@@ -663,8 +762,11 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
     })
     try(stopCluster(cl))
     gc()
+
+    cat("\n\n")
   }
   # return(NULL)
   invisible("Finished")
 }
+
 

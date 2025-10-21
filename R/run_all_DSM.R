@@ -1,6 +1,6 @@
 #' Fit models
 #'
-#' with all combinations of covariates desired, and return AIC and LOO metrics if desired.
+#' with all combinations of covariates desired, and return AIC and LOO metrics if desired. Uses nb() family. Function should be modified otherwise.
 #'
 #' @param segdata_obs
 #' @param response
@@ -32,7 +32,6 @@
 #' @param outfile
 #' @param first_try
 #' @param first_try_AIC
-#' @param likelihood
 #' @param smoother
 #' @param fit_models
 #'
@@ -46,7 +45,7 @@
 run_all_DSM <- function (segdata_obs,
                          response = "ppho",
                          predictors,
-                         smoother = function(variable,
+                         smoother = function(variable, # should not contain the
                                              bs,
                                              complexity) {
                            return(paste0("s(", variable, ", bs = '", bs, "', k = ", complexity, ")"))
@@ -90,7 +89,6 @@ run_all_DSM <- function (segdata_obs,
                          outfile = "logs.txt",
                          first_try = F, # if you want to pre-select the number of best models (based on AIC) to use before running LOO, so that computation is fast. Just define here the number of best models to select if so.
                          first_try_AIC = F, # same but based on AIC difference compared to the best model: define here the maximum difference in AIC that you allow to select models that will run through the LOO.
-                         likelihood = "negbin",
                          fit_models = T # if you want to return the list of models to fit before to actually fit them, set fit_models = F)
 )
 {
@@ -98,6 +96,7 @@ run_all_DSM <- function (segdata_obs,
   weighted = FALSE
   parallel = T
   verbose <- F
+  likelihood = "negbin"
 
   rescale2 <- function (ynew, y = NULL)
   {

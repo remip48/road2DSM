@@ -26,6 +26,12 @@ extract_grid <- function(grid,
                          # version_file = as.character(lubridate::today()),
                          try_to_combine_filetsets = T,
                          dates,
+                         n_steps_lon = ifelse(length(unique(grid$lon_cent)) >= (nrow(grid) * 3 / 4),
+                                              ceiling(sqrt(nrow(grid))) / 2,
+                                              length(unique(grid$lon_cent)) / 2),
+                         n_steps_lat = ifelse(length(unique(grid$lat_cent)) >= (nrow(grid) * 3 / 4),
+                                              ceiling(sqrt(nrow(grid))) / 2,
+                                              length(unique(grid$lat_cent)) / 2),
                          n_cores = NULL,
                          outfile = "log.txt") {
 
@@ -33,7 +39,7 @@ extract_grid <- function(grid,
   today <- version_file
 
   if (length(list.files(writing_directory)) > 0) {
-    warning(paste0(writing_directory, " contains already files. Be careful that only the currently created grids must be in the directory used to predict in the function model_comparison (used for prediction as well).\n"))
+    cat(paste0(writing_directory, " contains already files. Be careful that only the currently created grids must be in the directory used to predict in the function model_comparison (used for prediction as well).\n"))
   } # (version_file = ", version_file, ")
 
   cat("Files will be written as", paste0(version_file, "_grid_DATE.rds"), "\n")
@@ -85,7 +91,7 @@ extract_grid <- function(grid,
   # pkg::fun(timeDate)
 
   list_set <- list.files(file_set_directory)
-  list_set <- list_set[str_detect(list_set, "file_set_")]
+  list_set <- list_set[str_detect(list_set, fixed("file_set_")) & !str_detect(list_set, fixed("."))]
   list_set <- list_set[!is.na(as.numeric(str_remove_all(list_set, fixed("file_set_"))))]
 
   if (any(is.na(dates))) {
@@ -105,7 +111,8 @@ extract_grid <- function(grid,
 
   extract <- foreach(d = sort(list_date),
                      .noexport = ls()[!(ls() %in% c("grid", "variable", "writing_directory", "list_set", "max_lon",
-                                                    "file_set_directory", "today", "try_to_combine_filetsets"))],
+                                                    "file_set_directory", "today", "try_to_combine_filetsets",
+                                                    "n_steps_lon", "n_steps_lat"))],
                      .packages = c("sf", "dplyr", "stringr", "purrr")
   ) %dopar% {
     if (!file.exists(paste0(writing_directory, "/", today, "_grid_", d, ".rds"))) {
@@ -236,6 +243,20 @@ extract_grid <- function(grid,
 
         bb <- st_bbox(out)
 
+        gridcc <- out %>%
+          st_coordinates(.) %>%
+          as.data.frame() %>%
+          group_by(L2) %>%
+          dplyr::summarise(Xmin = min(X), Xmax = max(X),
+                           Ymin = min(Y), Ymax = max(Y)) %>%
+          ungroup()
+
+        out <- out %>%
+          dplyr::mutate(Xmin = gridcc$Xmin,
+                        Xmax = gridcc$Xmax,
+                        Ymin = gridcc$Ymin,
+                        Ymax = gridcc$Ymax)
+
         out_grid <- lapply(out_grid, function(grid) {
           gridcc <- grid %>%
             st_coordinates(.) %>%
@@ -287,6 +308,24 @@ extract_grid <- function(grid,
         #   )
         # })
 
+        dl <- seq(min(out$lon_cent) - .001, max(out$lon_cent) + .001, length = ceiling(n_steps_lon + 1))
+        dt <- seq(min(out$lat_cent) - .001, max(out$lat_cent) + .001, length = ceiling(n_steps_lat + 1))
+
+        out_steps <- do.call("c", lapply(1:(length(dl) - 1), function(l) {
+          lapply(1:(length(dt) - 1), function(t) {
+            outi <- out[out$lon_cent >= dl[l] & out$lon_cent < dl[l + 1] &
+                          out$lat_cent >= dt[t] & out$lat_cent < dt[t + 1], ]
+
+            if (nrow(outi) > 0) {
+              return(outi)
+            } else {
+              return(NULL)
+            }
+          })
+        }))
+
+        out_steps <- out_steps[-which(sapply(out_steps, is.null))]
+
         final <- lapply(out_grid, function(grid) {
 
           cols_grid <- all_cols[all_cols %in% colnames(grid)]
@@ -295,20 +334,23 @@ extract_grid <- function(grid,
                           grid$Ymax >= bb[2] & grid$Ymin <= bb[4], ] %>%
             st_make_valid()
 
-          # dl <- sort(unique(gridi$lon_cent))
-          # dl <- max(dl[-1] - dl[-length(dl)])
+          # out_steps <- lapply(1:nrow(out), function(l) {
+          #   out[l, ]
+          # })
 
-          out <- map_dfr(unique(gridi$lon_cent), function(l) {
+          out_out <- map_dfr(out_steps, function(l) {
             # print(match((l), unique(gridi$lon_cent)))
+            # cat(ll, "\n")
+            # l <- out_steps[[ll]]
+            # outi <- gridi[gridi$lon_cent == l, ]
 
-            outi <- gridi[gridi$lon_cent == l, ]
-
-            return(outi %>%
+            # if (!is.null(nrow(l))) {
+            return(gridi[gridi$Xmax > min(l$Xmin) & gridi$Xmin < max(l$Xmax) &
+                           gridi$Ymax > min(l$Ymin) & gridi$Ymin < max(l$Ymax), ] %>%
                      dplyr::select(all_of(cols_grid)) %>%
                      # st_make_valid() %>%
                      # dplyr::filter(c(st_intersects(., cout, sparse = F))) %>%
-                     st_intersection(., out[out$Xmax >= min(outi$Xmin) & out$Xmin <= max(outi$Xmax) &
-                                              out$Ymax >= min(outi$Ymin) & out$Ymin <= max(outi$Ymax), ]) %>%
+                     st_intersection(., l) %>%
                      dplyr::mutate(area_km2 = as.numeric(st_area(.))) %>%
                      st_drop_geometry() %>%
                      dplyr::select(id, area_km2, all_of(cols_grid)) %>%
@@ -318,10 +360,11 @@ extract_grid <- function(grid,
                                                   sum(area_km2[!is.na(.x)], na.rm = T)))
                      ) %>%
                      ungroup())
+            # }
 
           })
 
-          return(out)
+          return(out_out)
         })
 
         for (i in 1:length(final)) {
