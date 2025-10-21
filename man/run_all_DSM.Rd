@@ -8,9 +8,10 @@ run_all_DSM(
   segdata_obs,
   response = "ppho",
   predictors,
-  smoother = function(variable, bs, complexity) {
-     return(paste0("s(", variable,
-    ", bs = '", bs, "', k = ", complexity, ")"))
+  smoother = function(variable, bs, complexity, bs_cc) {
+     return(paste0("s(",
+    variable, ", bs = '", ifelse(variable \%in\% bs_cc, "cc", bs), "', k = ", complexity,
+    ")"))
  },
   complexity = 10,
   bs = "cs",
@@ -26,6 +27,7 @@ run_all_DSM(
   intermediate_model_save = NULL,
   load_saved_models = F,
   fit_all_once = T,
+  cc_covariate = NULL,
   list_models_to_do = NULL,
   force_one_off = NULL,
   not_together = NULL,
@@ -42,7 +44,7 @@ run_all_DSM(
 )
 }
 \arguments{
-\item{fit_models}{}
+\item{cc_covariate}{}
 }
 \description{
 with all combinations of covariates desired, and return AIC and LOO metrics if desired. Uses nb() family. Function should be modified otherwise.

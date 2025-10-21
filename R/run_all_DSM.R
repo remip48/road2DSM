@@ -33,6 +33,7 @@
 #' @param first_try_AIC
 #' @param smoother
 #' @param fit_models
+#' @param cc_covariate
 #'
 #' @return
 #' @importFrom foreach %dopar%
@@ -46,8 +47,13 @@ run_all_DSM <- function (segdata_obs,
                          predictors,
                          smoother = function(variable, # should not contain the
                                              bs,
-                                             complexity) {
-                           return(paste0("s(", variable, ", bs = '", bs, "', k = ", complexity, ")"))
+                                             complexity,
+                                             bs_cc) {
+                           return(paste0("s(", variable,
+                                         ", bs = '", ifelse(variable %in% bs_cc,
+                                                            "cc",
+                                                            bs),
+                                         "', k = ", complexity, ")"))
                          },
                          complexity = 10, # number of knots to use for the predictors.
                          bs = "cs", # bs to use for the predictors. If spline_by is numeric and by_te = T, must be of length = length(spline_by) + 1. First element is used for bs of predictors, nexts are used for spline_by variables. You can set bs = "fs" or bs = "cs" for spline_by, which will be adapted correctly in the code.
@@ -75,6 +81,7 @@ run_all_DSM <- function (segdata_obs,
                          intermediate_model_save = NULL, # if you want to save the fitted models before running LOO or AIC selection. Actually useful when you are not sure that LOO will run entirely without memory limit.
                          load_saved_models = F,
                          fit_all_once = T,
+                         cc_covariate = NULL,
                          list_models_to_do = NULL, # if you dont want to just provide the list of models to do instead of the function determining it itself. Must be a list, each element (is a model to run) being a c() containing the predictors to use in this respective model.
                          force_one_off = NULL,
                          not_together = NULL,
@@ -99,9 +106,9 @@ run_all_DSM <- function (segdata_obs,
 
   rescale2 <- function (ynew, y = NULL)
   {
-    assert_that(is.numeric(ynew) && is.vector(ynew) && length(ynew) >=
+    assertthat::assert_that(is.numeric(ynew) && is.vector(ynew) && length(ynew) >=
                   3)
-    assert_that((is.numeric(y) && is.vector(y) && length(y) >=
+    assertthat::assert_that((is.numeric(y) && is.vector(y) && length(y) >=
                    3) || is.null(y))
     if (is.null(y)) {
       out <- (ynew - mean(ynew, na.rm = TRUE))/(sd(ynew, na.rm = TRUE))
@@ -459,7 +466,8 @@ run_all_DSM <- function (segdata_obs,
   # }
   smoothers <- smoother(variable = predictors,
                         bs = bs,
-                        complexity = complexity)
+                        complexity = complexity,
+                        bs_cc = cc_covariate)
 
   # if (by_te | use_ti) {
   #   segdata_obs[, c(predictors#, "lon", "lat"
@@ -622,12 +630,12 @@ run_all_DSM <- function (segdata_obs,
   if (all(is.null(dataset_4correlation))) {
     rho <- X %>%
       dplyr::select(all_of(predictors)) %>%
-      drop_na() %>%
+      tidyr::drop_na() %>%
       cor()
   } else {
     rho <- dataset_4correlation %>%
       dplyr::select(all_of(predictors)) %>%
-      drop_na() %>%
+      tidyr::drop_na() %>%
       cor()
   }
 
@@ -670,7 +678,7 @@ run_all_DSM <- function (segdata_obs,
       n_cores <- ifelse(parallel, ifelse(is.null(ncores),
                                          detectCores() - 1,
                                          ncores), 1)
-      clust <- makeCluster(n_cores, outfile = outfile)
+      clust <- parallel::makeCluster(n_cores, outfile = outfile)
       doParallel::registerDoParallel(clust)
 
       rm_combn <- list()
@@ -761,7 +769,7 @@ run_all_DSM <- function (segdata_obs,
                         } else {
                           rho <- cor(dataset_4correlation %>%
                                        dplyr::select(all_of(m)) %>%
-                                       drop_na())
+                                       tidyr::drop_na())
                         }
 
                         diag(rho) <- 0
@@ -799,7 +807,7 @@ run_all_DSM <- function (segdata_obs,
   n_cores <- ifelse(parallel, ifelse(is.null(ncores),
                                      detectCores() - 1,
                                      ncores), 1)
-  clust <- makeCluster(n_cores, outfile = outfile)
+  clust <- parallel::makeCluster(n_cores, outfile = outfile)
   doParallel::registerDoParallel(clust)
 
   all_mods <- do.call("c", map(all_x, function(mat) {
@@ -832,13 +840,13 @@ run_all_DSM <- function (segdata_obs,
 
   }
 
-  stopCluster(clust)
+  parallel::stopCluster(clust)
   gc()
 
   # all_mods <- all_mods[which(rm_combn < max_correlation)] ## used previously
 
   all_mods <- paste0(all_mods, ifelse(!is.null(offset_effort),
-                                      "+ offset(I(log(", offset_effort, ")))",
+                                      paste0("+ offset(I(log(", offset_effort, ")))"),
                                       ""))
 
   # if (weighted) {
@@ -940,7 +948,7 @@ run_all_DSM <- function (segdata_obs,
     n_cores <- ifelse(parallel, ifelse(is.null(ncores),
                                        detectCores() - 1,
                                        ncores), 1)
-    clust <- makeCluster(n_cores, outfile = outfile)
+    clust <- parallel::makeCluster(n_cores, outfile = outfile)
     doParallel::registerDoParallel(clust)
 
     if (first_try != F | first_try_AIC != F) {
@@ -1068,10 +1076,10 @@ run_all_DSM <- function (segdata_obs,
       BAM_try <- data.frame(model = all_mods)
     }
 
-    stopCluster(clust)
+    parallel::stopCluster(clust)
     gc()
 
-    clust <- makeCluster(min(n_cores, nrow(BAM_try)), outfile = outfile)
+    clust <- parallel::makeCluster(min(n_cores, nrow(BAM_try)), outfile = outfile)
     doParallel::registerDoParallel(clust)
 
     if (fit_all_once) {
@@ -1135,7 +1143,7 @@ run_all_DSM <- function (segdata_obs,
                             ExpDev = NA, RMSE = NA))
         }
       }
-      stopCluster(clust)
+      parallel::stopCluster(clust)
       gc()
     } else {
       all_fits <- foreach(x = 1:length(all_mods),
@@ -1217,7 +1225,7 @@ run_all_DSM <- function (segdata_obs,
                             ExpDev = NA, RMSE = NA))
         }
       }
-      stopCluster(clust)
+      parallel::stopCluster(clust)
       gc()
     }
 
@@ -1247,7 +1255,7 @@ run_all_DSM <- function (segdata_obs,
     n_cores <- ifelse(parallel, ifelse(is.null(ncores),
                                        detectCores() - 1,
                                        ncores), 1)
-    clust <- makeCluster(n_cores, outfile = outfile)
+    clust <- parallel::makeCluster(n_cores, outfile = outfile)
     doParallel::registerDoParallel(clust)
 
     if (fit_all_once) {
@@ -1308,7 +1316,7 @@ run_all_DSM <- function (segdata_obs,
           return(out)
         }
       }
-      stopCluster(clust)
+      parallel::stopCluster(clust)
       gc()
     } else {
       all_psis <- foreach(x = 1:length(all_mods),
@@ -1391,7 +1399,7 @@ run_all_DSM <- function (segdata_obs,
           return(NULL)
         }
       }
-      stopCluster(clust)
+      parallel::stopCluster(clust)
       gc()
     }
     # }
@@ -1420,7 +1428,7 @@ run_all_DSM <- function (segdata_obs,
       n_cores <- ifelse(parallel, ifelse(is.null(ncores),
                                          detectCores() - 1,
                                          ncores), 1)
-      clust <- makeCluster(n_cores, outfile = outfile)
+      clust <- parallel::makeCluster(n_cores, outfile = outfile)
       doParallel::registerDoParallel(clust)
 
       best <- foreach(x = index_order_sw,
@@ -1496,7 +1504,7 @@ run_all_DSM <- function (segdata_obs,
         return(all_models_fitted[[x]])
       })
 
-      stopCluster(clust)
+      parallel::stopCluster(clust)
       gc()
     }
 
@@ -1515,7 +1523,7 @@ run_all_DSM <- function (segdata_obs,
     n_cores <- ifelse(parallel, ifelse(is.null(ncores),
                                        detectCores() - 1,
                                        ncores), 1)
-    clust <- makeCluster(n_cores, outfile = outfile)
+    clust <- parallel::makeCluster(n_cores, outfile = outfile)
     doParallel::registerDoParallel(clust)
 
     if (fit_all_once) {
@@ -1739,7 +1747,7 @@ run_all_DSM <- function (segdata_obs,
     all_fits <- all_fits %>% arrange(AIC)
   }
   if (parallel) {
-    try(stopCluster(clust))
+    try(parallel::stopCluster(clust))
   }
   return(list(n_best = k, all_fits_binded = all_fits, best_models = best_std, all_models_tried = all_mods,
               best_models4plotting = best))
