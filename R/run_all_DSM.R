@@ -18,7 +18,6 @@
 #' @param intermediate_model_save
 #' @param load_saved_models
 #' @param fit_all_once
-#' @param save_list_models
 #' @param list_models_to_do
 #' @param force_one_off
 #' @param not_together
@@ -76,7 +75,6 @@ run_all_DSM <- function (segdata_obs,
                          intermediate_model_save = NULL, # if you want to save the fitted models before running LOO or AIC selection. Actually useful when you are not sure that LOO will run entirely without memory limit.
                          load_saved_models = F,
                          fit_all_once = T,
-                         save_list_models = "models.rds",
                          list_models_to_do = NULL, # if you dont want to just provide the list of models to do instead of the function determining it itself. Must be a list, each element (is a model to run) being a c() containing the predictors to use in this respective model.
                          force_one_off = NULL,
                          not_together = NULL,
@@ -97,6 +95,7 @@ run_all_DSM <- function (segdata_obs,
   parallel = T
   verbose <- F
   likelihood = "negbin"
+  save_list_models = "models.rds"
 
   rescale2 <- function (ynew, y = NULL)
   {
@@ -374,7 +373,7 @@ run_all_DSM <- function (segdata_obs,
   #     cli::cli_alert_warning("One or multiple levels of {.val spatial_options$by} are empty, consider relevel factor of {.val spatial_options$by} : \n \t {.code segdata_obs$session <- droplevels(segdata_obs$session)}")
   #   }
   # }
-  assertthat::assert_that(segdata_obs %has_name% predictors)
+  # assertthat::assert_that(segdata_obs %has_name% predictors)
   X <- segdata_obs
   # if (all(is.null(splines_by))) {
   #   smoothers <- paste("s(", predictors, ", k = ", complexity,

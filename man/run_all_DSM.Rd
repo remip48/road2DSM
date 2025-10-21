@@ -26,7 +26,6 @@ run_all_DSM(
   intermediate_model_save = NULL,
   load_saved_models = F,
   fit_all_once = T,
-  save_list_models = "models.rds",
   list_models_to_do = NULL,
   force_one_off = NULL,
   not_together = NULL,
