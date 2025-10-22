@@ -647,6 +647,8 @@ run_all_DSM <- function (segdata_obs,
 
   diag(rho) <- 0
 
+  nb_max_pred <- min(nb_max_pred, length(predictors))
+
   if (is.null(list_models_to_do)) {
     ## first version
     all_x <- map(unique(c(1, nb_min_pred:nb_max_pred)), function(ii) {
@@ -658,6 +660,9 @@ run_all_DSM <- function (segdata_obs,
                       force_include = force_includei,
                       force_one_off = force_one_offi,
                       not_together = not_togetheri)
+        if (!is.matrix(out)) {
+          out <- matrix(out, ncol = 1)
+        }
         if (length(out) == 0 | nrow(out) == 0 | all(is.na(out)) | all(is.null(out)) | all(is.nan(out))) {
           return(NA)
         } else {
@@ -868,6 +873,11 @@ run_all_DSM <- function (segdata_obs,
   #                 length(all_mods)
   #   )
   # }
+
+  w <- matrix(1, nrow = nrow(segdata_obs), ncol = #length(which(rm_combn <
+                #max_correlation))
+                length(all_mods)
+              )
 
   my_dsm_fct <- function(x, tab = TRUE, segdata_obs, loo = FALSE, method,
                          bnd = soap$bnd, knots = soap$knots, verbose = F) {
