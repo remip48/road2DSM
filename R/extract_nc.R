@@ -646,7 +646,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
               if (run_mean_SDspace) {
                 setDT(outM)
 
-                id_nc_table <- outM[, .(id_nc = id_nc[which.min(dist)]), by = .(id, t)]
+                id_nc_table <- outM[, c(list(id_nc = id_nc[which.min(dist)])), by = list(id, t)]
 
                 if (all(c("SDspace", "mean") %in% pred.type)) {
                   outM <- outM[, c(list(id_nc = id_nc[which.min(dist)]),
@@ -680,7 +680,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                         setNames(sds,   paste0(Predictor.names, ".SDspace"))
                       ))
                     },
-                    by = .(id, t),
+                    by = list(id, t),
                     .SDcols = Predictor.names
                   ]
                 }
