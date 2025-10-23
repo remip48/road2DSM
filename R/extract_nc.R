@@ -224,11 +224,11 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
           unique()
       }
 
-    else {
+      else {
 
-       NA
+        NA
 
-    }) %>%
+      }) %>%
       ungroup()
 
     infos_dim <- map_dfr(1:nrow(ncinfoi), function(i) {
@@ -616,43 +616,59 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                               na.rm = T) * (pixel.radius + 0.5)
               outM <- map_dfr(unique(data$lon_cent),
                               function(l) {
-                                data.var_ref_t1l <- data.var_ref_t1[abs(l -
-                                                                          data.var_ref_t1$lon) <= res_lon,
-                                ]
+                                data.var_ref_t1l <- data.var_ref_t1[abs(l - data.var_ref_t1$lon) <= res_lon, ]
                                 return(data[data$lon_cent == l, ] %>%
-                                         group_by(id) %>% group_map(~{
-                                           c(lat_cent = .x$lat_cent, lon_cent = .x$lon_cent,
-                                             id = .y$id, id_nc = paste(data.var_ref_t1l$id_nc[abs(.x$lat_cent -
-                                                                                                    data.var_ref_t1l$lat) <= res_lat],
-                                                                       collapse = ","))
-                                         }) %>% bind_rows())
-                              }) %>% group_by(id) %>% dplyr::reframe(id_nc = str_split_1(id_nc,
-                                                                                         ","), lon_cent = lon_cent, lat_cent = lat_cent) %>%
+                                         group_by(id) %>%
+                                         group_map(~{
+                                           c(lat_cent = .x$lat_cent,
+                                             lon_cent = .x$lon_cent,
+                                             id = .y$id,
+                                             id_nc = paste(data.var_ref_t1l$id_nc[abs(.x$lat_cent - data.var_ref_t1l$lat) <= res_lat], collapse = ","))
+                                         }) %>%
+                                         bind_rows())
+                              }) %>%
+                group_by(id) %>%
+                dplyr::reframe(id_nc = str_split_1(id_nc, ","), lon_cent = lon_cent, lat_cent = lat_cent) %>%
                 dplyr::mutate(across(colnames(.), ~as.numeric(.x))) %>%
                 left_join(data.var_ref, by = "id_nc",
                           relationship = "many-to-many") %>%
                 dplyr::mutate(dist = abs(lat_cent - lat) +
-                                abs(lon_cent - lon)) %>% dplyr::select(id,
-                                                                       t, id_nc, dist, all_of(Predictor.name))
+                                abs(lon_cent - lon)) %>% dplyr::select(id, t, id_nc, dist, all_of(Predictor.name))
               if (run_mean_SDspace) {
                 setDT(outM)
                 if (all(c("SDspace", "mean") %in% pred.type)) {
-                  outM <- outM[, c(list(id_nc = id_nc[which.min(dist)]),
-                                   setNames(fmean(.SD, na.rm = TRUE),
-                                            paste0(Predictor.name, ".mean")),
-                                   setNames(fsd(.SD, na.rm = TRUE), paste0(Predictor.name,
-                                                                           ".SDspace"))), by = list(id, t), .SDcols = Predictor.name]
+                  outM <- outM[, {
+                    .id_nc <- id_nc[which.min(dist)]
+                    .means <- setNames(fmean(.SD, na.rm = TRUE), paste0(Predictor.name, ".mean"))
+                    .sds   <- setNames(fsd(.SD, na.rm = TRUE), paste0(Predictor.name, ".SDspace"))
+                    c(list(id_nc = .id_nc), .means, .sds)
+                  }, by = .(id, t), .SDcols = Predictor.name]
+                  # outM <- outM[, c(list(id_nc = id_nc[which.min(dist)]),
+                  #                  setNames(fmean(.SD, na.rm = TRUE),
+                  #                           paste0(Predictor.name, ".mean")),
+                  #                  setNames(fsd(.SD, na.rm = TRUE), paste0(Predictor.name,
+                  #                                                          ".SDspace"))), by = list(id, t), .SDcols = Predictor.name]
                 }
                 else if ("mean" %in% pred.type) {
-                  outM <- outM[, c(list(id_nc = id_nc[which.min(dist)]),
-                                   setNames(fmean(.SD, na.rm = TRUE),
-                                            paste0(Predictor.name, ".mean"))),
-                               by = list(id, t), .SDcols = Predictor.name]
+                  outM <- outM[, {
+                    .id_nc <- id_nc[which.min(dist)]
+                    .means <- setNames(fmean(.SD, na.rm = TRUE), paste0(Predictor.name, ".mean"))
+                    c(list(id_nc = .id_nc), .means)
+                  }, by = .(id, t), .SDcols = Predictor.name]
+                  # outM <- outM[, c(list(id_nc = id_nc[which.min(dist)]),
+                  #                  setNames(fmean(.SD, na.rm = TRUE),
+                  #                           paste0(Predictor.name, ".mean"))),
+                  #              by = list(id, t), .SDcols = Predictor.name]
                 }
                 else if ("SDspace" %in% pred.type) {
-                  outM <- outM[, c(list(id_nc = id_nc[which.min(dist)]),
-                                   setNames(fsd(.SD, na.rm = TRUE), paste0(Predictor.name,
-                                                                           ".SDspace"))), by = list(id, t), .SDcols = Predictor.name]
+                  outM <- outM[, {
+                    .id_nc <- id_nc[which.min(dist)]
+                    .sds   <- setNames(fsd(.SD, na.rm = TRUE), paste0(Predictor.name, ".SDspace"))
+                    c(list(id_nc = .id_nc), .sds)
+                  }, by = .(id, t), .SDcols = Predictor.name]
+                  # outM <- outM[, c(list(id_nc = id_nc[which.min(dist)]),
+                  #                  setNames(fsd(.SD, na.rm = TRUE), paste0(Predictor.name,
+                  #                                                          ".SDspace"))), by = list(id, t), .SDcols = Predictor.name]
                 }
                 outM <- outM %>% as_tibble()
                 # if (run_mean_SDspace) {
