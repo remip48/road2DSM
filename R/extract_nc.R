@@ -231,11 +231,11 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
           unique()
       }
 
-    else {
+      else {
 
-       NA
+        NA
 
-    }) %>%
+      }) %>%
       ungroup()
 
     infos_dim <- map_dfr(1:nrow(ncinfoi), function(i) {
@@ -612,6 +612,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
               all_pixel.radius <- 0
             }
 
+            cat("run final")
             final <- lapply(all_pixel.radius, function(pixel.radius) {
               if (pixel.radius != all_pixel.radius[1] &
                   !run_mean_SDspace) {
@@ -621,6 +622,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                               na.rm = T) * (pixel.radius + 0.5)
               res_lon <- mean(sort(lon)[-1] - sort(lon)[-length(lon)],
                               na.rm = T) * (pixel.radius + 0.5)
+              cat("now run datatable1")
               outM <- map_dfr(unique(data$lon_cent),
                               function(l) {
                                 data.var_ref_t1l <- data.var_ref_t1[abs(l -
