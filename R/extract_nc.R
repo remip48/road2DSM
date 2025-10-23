@@ -634,8 +634,13 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                 dplyr::mutate(dist = abs(lat_cent - lat) +
                                 abs(lon_cent - lon)) %>% dplyr::select(id,
                                                                        t, id_nc, dist, all_of(Predictor.name))
+
+              cat("now run datatable")
               if (run_mean_SDspace) {
                 setDT(outM)
+
+                id_nc_table <- outM[, .(id_nc = id_nc[which.min(dist)]), by = .(id, t)]
+
                 if (all(c("SDspace", "mean") %in% pred.type)) {
                   outM <- outM[, c(list(id_nc = id_nc[which.min(dist)]),
                                    setNames(fmean(.SD, na.rm = TRUE),
@@ -650,13 +655,26 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                by = list(id, t), .SDcols = Predictor.name]
                 }
                 else if ("SDspace" %in% pred.type) {
-                  outM <- outM[
-                    , c(
-                      list(id_nc = id_nc[which.min(dist)]),
-                      setNames(fsd(get(Predictor.name), na.rm = TRUE),
-                               paste0(Predictor.name, ".SDspace"))
-                    ),
-                    by = .(id, t)
+                  # outM <- outM[
+                  #   , c(
+                  #     list(id_nc = id_nc[which.min(dist)]),
+                  #     setNames(fsd(get(Predictor.name), na.rm = TRUE),
+                  #              paste0(Predictor.name, ".SDspace"))
+                  #   ),
+                  #   by = .(id, t)
+                  # ]
+                  sdspace_table <- outM[
+                    , {
+                      # compute mean and SD across all predictors listed in Predictor.names
+                      sds   <- sapply(.SD, fsd, na.rm = TRUE)
+
+                      # return as a list with descriptive names
+                      as.list(c(
+                        setNames(sds,   paste0(Predictor.names, ".SDspace"))
+                      ))
+                    },
+                    by = .(id, t),
+                    .SDcols = Predictor.names
                   ]
                 }
                 outM <- merge(id_nc_table, sdspace_table, by = c("id", "t"))
