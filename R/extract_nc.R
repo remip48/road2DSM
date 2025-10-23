@@ -20,10 +20,17 @@
 #' @return
 #' @importFrom foreach %dopar%
 #' @importFrom foreach foreach
-#'
+#' @import data.table
+#' @importFrom data.table .SD .N :=
+NULL
+
+utils::globalVariables(c(".", ".N", ".SD", ":="))
+
 #' @export
 #'
 #' @examples
+
+
 extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                         all_time.period, dates, lonmin = -Inf, latmin = -Inf, lonmax = Inf,
                         latmax = Inf, Number_starting_name_file_set = 1, n_cores = NULL, outfile = "log.txt")
