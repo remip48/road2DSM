@@ -646,28 +646,29 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
 
               # cat("now run datatable")
               if (run_mean_SDspace) {
-                outM <- as.data.table(outM)
+                outMsd <- as.data.table(outM)
 
+                rm(outM)
                 # id_nc_table <- outM[,list(id_nc = .SD$id_nc[which.min(.SD$dist)]),
                 #   by = list(id, t),
                 #   .SDcols = c("id_nc", "dist")
                 # ]
 
                 if (all(c("SDspace", "mean") %in% pred.type)) {
-                  outM <- outM[, c(list(id_nc = id_nc[which.min(dist)]),
+                  outMsd <- outMsd[, c(list(id_nc = id_nc[which.min(dist)]),
                                    setNames(fmean(.SD, na.rm = TRUE),
                                             paste0(Predictor.name, ".mean")),
                                    setNames(fsd(.SD, na.rm = TRUE), paste0(Predictor.name,
                                                                            ".SDspace"))), by = list(id, t), .SDcols = Predictor.name]
                 }
                 else if ("mean" %in% pred.type) {
-                  outM <- outM[, c(list(id_nc = id_nc[which.min(dist)]),
+                  outMsd <- outMsd[, c(list(id_nc = id_nc[which.min(dist)]),
                                    setNames(fmean(.SD, na.rm = TRUE),
                                             paste0(Predictor.name, ".mean"))),
                                by = list(id, t), .SDcols = Predictor.name]
                 }
                 else if ("SDspace" %in% pred.type) {
-                  outM <- outM[
+                  outMsd <- outMsd[
                     , c(
                       list(id_nc = id_nc[which.min(dist)]),
                       setNames(fsd(.SD, na.rm = TRUE),
@@ -695,7 +696,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                 }
                 # outM <- merge(id_nc_table, sdspace_table, by = c("id", "t"))
 
-                outM <- outM %>% as_tibble()
+                outM <- outMsd %>% as_tibble()
                 # if (run_mean_SDspace) {
                 colnames(outM)[str_detect(colnames(outM),
                                           fixed(".mean")) | str_detect(colnames(outM),
