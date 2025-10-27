@@ -20,10 +20,17 @@
 #' @return
 #' @importFrom foreach %dopar%
 #' @importFrom foreach foreach
-#'
+#' @import data.table
+#' @importFrom data.table .SD .N :=
+NULL
+
+utils::globalVariables(c(".", ".N", ".SD", ":="))
+
 #' @export
 #'
 #' @examples
+
+
 extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                         all_time.period, dates, lonmin = -Inf, latmin = -Inf, lonmax = Inf,
                         latmax = Inf, Number_starting_name_file_set = 1, n_cores = NULL, outfile = "log.txt")
@@ -224,11 +231,11 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
           unique()
       }
 
-    else {
+      else {
 
-       NA
+        NA
 
-    }) %>%
+      }) %>%
       ungroup()
 
     infos_dim <- map_dfr(1:nrow(ncinfoi), function(i) {
@@ -605,6 +612,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
               all_pixel.radius <- 0
             }
 
+            # cat("run final")
             final <- lapply(all_pixel.radius, function(pixel.radius) {
               if (pixel.radius != all_pixel.radius[1] &
                   !run_mean_SDspace) {
@@ -614,6 +622,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                               na.rm = T) * (pixel.radius + 0.5)
               res_lon <- mean(sort(lon)[-1] - sort(lon)[-length(lon)],
                               na.rm = T) * (pixel.radius + 0.5)
+              # cat("now run datatable1")
               outM <- map_dfr(unique(data$lon_cent),
                               function(l) {
                                 data.var_ref_t1l <- data.var_ref_t1[abs(l -
@@ -634,27 +643,60 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                 dplyr::mutate(dist = abs(lat_cent - lat) +
                                 abs(lon_cent - lon)) %>% dplyr::select(id,
                                                                        t, id_nc, dist, all_of(Predictor.name))
+
+              # cat("now run datatable")
               if (run_mean_SDspace) {
-                setDT(outM)
+                outMsd <- as.data.table(outM)
+
+                rm(outM)
+                # id_nc_table <- outM[,list(id_nc = .SD$id_nc[which.min(.SD$dist)]),
+                #   by = list(id, t),
+                #   .SDcols = c("id_nc", "dist")
+                # ]
+
                 if (all(c("SDspace", "mean") %in% pred.type)) {
-                  outM <- outM[, c(list(id_nc = id_nc[which.min(dist)]),
+                  outMsd <- outMsd[, c(list(id_nc = id_nc[which.min(dist)]),
                                    setNames(fmean(.SD, na.rm = TRUE),
                                             paste0(Predictor.name, ".mean")),
                                    setNames(fsd(.SD, na.rm = TRUE), paste0(Predictor.name,
                                                                            ".SDspace"))), by = list(id, t), .SDcols = Predictor.name]
                 }
                 else if ("mean" %in% pred.type) {
-                  outM <- outM[, c(list(id_nc = id_nc[which.min(dist)]),
+                  outMsd <- outMsd[, c(list(id_nc = id_nc[which.min(dist)]),
                                    setNames(fmean(.SD, na.rm = TRUE),
                                             paste0(Predictor.name, ".mean"))),
                                by = list(id, t), .SDcols = Predictor.name]
                 }
                 else if ("SDspace" %in% pred.type) {
-                  outM <- outM[, c(list(id_nc = id_nc[which.min(dist)]),
-                                   setNames(fsd(.SD, na.rm = TRUE), paste0(Predictor.name,
-                                                                           ".SDspace"))), by = list(id, t), .SDcols = Predictor.name]
+                  outMsd <- outMsd[
+                    , c(
+                      list(id_nc = id_nc[which.min(dist)]),
+                      setNames(fsd(.SD, na.rm = TRUE),
+                               paste0(Predictor.name, ".SDspace"))
+                    ),
+                    by = .(id, t), .SDcols = Predictor.name
+                  ]
+                  # sdspace_table <- outM[
+                  #   , {
+                  #     # compute mean and SD across all predictors listed in Predictor.names
+                  #     sds   <- sapply(.SD, fsd, na.rm = TRUE)
+                  #
+                  #     # return as a list with descriptive names
+                  #     as.list(c(
+                  #       setNames(sds,   paste0(Predictor.names, ".SDspace"))
+                  #     ))
+                  #   },
+                  #   by = list(id, t),
+                  #   .SDcols = Predictor.names
+                  # ]
+                  # outM <- outM[, c(#list(id_nc = id_nc[which.min(dist)]),
+                  #   setNames(fsd(.SD, na.rm = TRUE), paste0(Predictor.name,
+                  #                                           ".SDspace"))),
+                  #   by = list(id, t), .SDcols = Predictor.name]
                 }
-                outM <- outM %>% as_tibble()
+                # outM <- merge(id_nc_table, sdspace_table, by = c("id", "t"))
+
+                outM <- outMsd %>% as_tibble()
                 # if (run_mean_SDspace) {
                 colnames(outM)[str_detect(colnames(outM),
                                           fixed(".mean")) | str_detect(colnames(outM),
@@ -667,7 +709,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                              dplyr::select(id_nc, t, all_of(Predictor.name)),
                                            by = c("t", "id_nc")) %>% dplyr::select(-id_nc)
               }
-              setDT(outM)
+              outM <- as.data.table(outM)
               cols1 <- colnames(outM)[stringr::str_detect(colnames(outM),
                                                           fixed(".mean")) | stringr::str_detect(colnames(outM),
                                                                                                 fixed(".SDspace"))]
