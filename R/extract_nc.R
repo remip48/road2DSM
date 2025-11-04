@@ -81,6 +81,10 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
     return(out)
   }
 
+  if (any(as.character(dates) < min(as.character(nc_files$date_start), na.rm = T))) {
+    warning("At least one date to extract is prior to one NC file's starting date. The function will fail.")
+  }
+
   cl <- makeCluster(ifelse(is.null(n_cores), detectCores() *
                              2/4, n_cores))
   registerDoParallel(cl)
@@ -656,16 +660,16 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
 
                 if (all(c("SDspace", "mean") %in% pred.type)) {
                   outMsd <- outMsd[, c(list(id_nc = id_nc[which.min(dist)]),
-                                   setNames(fmean(.SD, na.rm = TRUE),
-                                            paste0(Predictor.name, ".mean")),
-                                   setNames(fsd(.SD, na.rm = TRUE), paste0(Predictor.name,
-                                                                           ".SDspace"))), by = list(id, t), .SDcols = Predictor.name]
+                                       setNames(fmean(.SD, na.rm = TRUE),
+                                                paste0(Predictor.name, ".mean")),
+                                       setNames(fsd(.SD, na.rm = TRUE), paste0(Predictor.name,
+                                                                               ".SDspace"))), by = list(id, t), .SDcols = Predictor.name]
                 }
                 else if ("mean" %in% pred.type) {
                   outMsd <- outMsd[, c(list(id_nc = id_nc[which.min(dist)]),
-                                   setNames(fmean(.SD, na.rm = TRUE),
-                                            paste0(Predictor.name, ".mean"))),
-                               by = list(id, t), .SDcols = Predictor.name]
+                                       setNames(fmean(.SD, na.rm = TRUE),
+                                                paste0(Predictor.name, ".mean"))),
+                                   by = list(id, t), .SDcols = Predictor.name]
                 }
                 else if ("SDspace" %in% pred.type) {
                   outMsd <- outMsd[

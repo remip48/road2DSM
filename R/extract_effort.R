@@ -7,6 +7,10 @@
 #' @param file_set_directory
 #' @param n_cores
 #' @param outfile
+#' @param rasters
+#' @param distance_to
+#' @param try_to_combine_filetsets
+#' @param from_upscale_SDspace if the extraction is wished on grids created by upscale_SDspace or not.
 #'
 #' @return
 #' @importFrom foreach %dopar%
@@ -21,6 +25,7 @@ extract_effort <- function(effort,
                            distance_to = list(distance_to_coast = NULL), # should be sf object
                            file_set_directory,
                            try_to_combine_filetsets = T,
+                           from_upscale_SDspace = F,
                            n_cores = NULL,
                            outfile = "log.txt") {
   # pkg::fun(sf)
@@ -43,6 +48,10 @@ extract_effort <- function(effort,
   list_set <- list_set[str_detect(list_set, fixed("file_set_")) & !str_detect(list_set, fixed("."))]
   list_set <- list_set[!is.na(as.numeric(str_remove_all(list_set, fixed("file_set_"))))]
 
+  if (length(list_set) == 0 & !from_upscale_SDspace) {
+    stop("No file_set_X folder found to contain grids in file_set_directory. Should from_upscale_SDspace be TRUE ?")
+  }
+
   effort$date <- as.character(effort$date)
 
   if (any(is.na(effort$date))) {
@@ -62,7 +71,7 @@ extract_effort <- function(effort,
   registerDoParallel(cl)
 
   extract <- foreach(d = sort(list_date),
-                     .noexport = ls()[!(ls() %in% c("effort", "variable", "list_set",
+                     .noexport = ls()[!(ls() %in% c("effort", "variable", "list_set", "from_upscale_SDspace",
                                                     "file_set_directory", "try_to_combine_filetsets"))],
                      .packages = c("sf", "dplyr", "stringr")
   ) %dopar% {
@@ -72,62 +81,121 @@ extract_effort <- function(effort,
       filter(date == d) %>%
       st_simplify()
 
-    out_grid <- lapply(list_set, function(f) {
-      # cat(d, f, "\n")
+    if (!from_upscale_SDspace) {
+      out_grid <- lapply(list_set, function(f) {
+        # cat(d, f, "\n")
 
-      phy <- read_sf(paste0(file_set_directory, "/", f, ".shp")) %>%
-        st_transform(crs = 3035) %>%
-        st_simplify() %>%
-        dplyr::mutate(lon_cent = round(lon_cent, 6),
-                      lat_cent = round(lat_cent, 6))
+        phy <- read_sf(paste0(file_set_directory, "/", f, ".shp")) %>%
+          st_transform(crs = 3035) %>%
+          st_simplify() %>%
+          dplyr::mutate(lon_cent = round(lon_cent, 6),
+                        lat_cent = round(lat_cent, 6))
 
-      list_files <- list.files(paste(file_set_directory, f, sep = "/"))[str_detect(list.files(paste(file_set_directory, f, sep = "/")), fixed(d))]
+        list_files <- list.files(paste(file_set_directory, f, sep = "/"))[str_detect(list.files(paste(file_set_directory, f, sep = "/")), fixed(d))]
 
-      if (length(list_files) > 0) {
-        for (lf in list_files) {
-          temp <- readRDS(paste(file_set_directory, f, lf, sep = "/")) %>%
-            dplyr::select(id, all_of(colnames(.)[!(colnames(.) %in% colnames(phy))]))
-
-          phy <- phy %>%
-            left_join(temp, by = "id") %>%
-            st_cast()
-        }
-
-        all_cols <- do.call("c", lapply(colnames(phy), function(c) {
-          if (any(str_detect(c, variable))) {c} else {NULL}
-        }))
-
-        for (c in all_cols[str_detect(all_cols, fixed(".center"))]) {
-          if (str_replace_all(c, "center", "mean") %in% all_cols & any(is.na(phy %>% pull(get(c))))) {
-            NAl <- which(is.na(phy %>% pull(get(c))))
+        if (length(list_files) > 0) {
+          for (lf in list_files) {
+            temp <- readRDS(paste(file_set_directory, f, lf, sep = "/")) %>%
+              dplyr::select(id, all_of(colnames(.)[!(colnames(.) %in% colnames(phy))]))
 
             phy <- phy %>%
-              dplyr::filter(is.na(get(c))) %>%
-              dplyr::mutate(!!c := (phy[NAl, ] %>% pull(get(str_replace_all(c, "center", "mean"))))) %>%
-              rbind(phy %>%
-                      dplyr::filter(!is.na(get(c)))) %>%
-              arrange(id)
-          } else if (str_replace_all(c, "center", "mean_1p.mean") %in% all_cols & any(is.na(phy %>% pull(get(c))))) {
-            NAl <- which(is.na(phy %>% pull(get(c))))
-
-            phy <- phy %>%
-              dplyr::filter(is.na(get(c))) %>%
-              dplyr::mutate(!!c := (phy[NAl, ] %>% pull(get(str_replace_all(c, "center", "mean_1p.mean"))))) %>%
-              rbind(phy %>%
-                      dplyr::filter(!is.na(get(c)))) %>%
-              arrange(id)
+              left_join(temp, by = "id") %>%
+              st_cast()
           }
-        }
 
-        return(phy %>%
-                 # dplyr::mutate(file_set = f) %>%
-                 # st_simplify() %>%
-                 st_cast() %>%
-                 st_transform(crs = st_crs(out)))
-      } else {
-        return(NULL)
-      }
-    })
+          all_cols <- do.call("c", lapply(colnames(phy), function(c) {
+            if (any(str_detect(c, variable))) {c} else {NULL}
+          }))
+
+          for (c in all_cols[str_detect(all_cols, fixed(".center"))]) {
+            if (str_replace_all(c, "center", "mean") %in% all_cols & any(is.na(phy %>% pull(get(c))))) {
+              NAl <- which(is.na(phy %>% pull(get(c))))
+
+              phy <- phy %>%
+                dplyr::filter(is.na(get(c))) %>%
+                dplyr::mutate(!!c := (phy[NAl, ] %>% pull(get(str_replace_all(c, "center", "mean"))))) %>%
+                rbind(phy %>%
+                        dplyr::filter(!is.na(get(c)))) %>%
+                arrange(id)
+            } else if (str_replace_all(c, "center", "mean_1p.mean") %in% all_cols & any(is.na(phy %>% pull(get(c))))) {
+              NAl <- which(is.na(phy %>% pull(get(c))))
+
+              phy <- phy %>%
+                dplyr::filter(is.na(get(c))) %>%
+                dplyr::mutate(!!c := (phy[NAl, ] %>% pull(get(str_replace_all(c, "center", "mean_1p.mean"))))) %>%
+                rbind(phy %>%
+                        dplyr::filter(!is.na(get(c)))) %>%
+                arrange(id)
+            }
+          }
+
+          return(phy %>%
+                   # dplyr::mutate(file_set = f) %>%
+                   # st_simplify() %>%
+                   st_cast() %>%
+                   st_transform(crs = st_crs(out)))
+        } else {
+          return(NULL)
+        }
+      })
+    } else {
+      out_grid <- lapply(1, function(f) {
+        # cat(d, f, "\n")
+
+        phy <- read_sf(paste0(file_set_directory, "/prediction_static_grid.shp")) %>%
+          st_transform(crs = 3035) %>%
+          st_simplify() %>%
+          dplyr::mutate(lon_cent = round(lon_cent, 6),
+                        lat_cent = round(lat_cent, 6))
+
+        list_files <- list.files(file_set_directory)[str_detect(list.files(file_set_directory), fixed(d))]
+
+        if (length(list_files) > 0) {
+          for (lf in list_files) {
+            temp <- readRDS(paste(file_set_directory, lf, sep = "/")) %>%
+              dplyr::select(id, all_of(colnames(.)[!(colnames(.) %in% colnames(phy))]))
+
+            phy <- phy %>%
+              left_join(temp, by = "id") %>%
+              st_cast()
+          }
+
+          all_cols <- do.call("c", lapply(colnames(phy), function(c) {
+            if (any(str_detect(c, variable))) {c} else {NULL}
+          }))
+
+          for (c in all_cols[str_detect(all_cols, fixed(".center"))]) {
+            if (str_replace_all(c, "center", "mean") %in% all_cols & any(is.na(phy %>% pull(get(c))))) {
+              NAl <- which(is.na(phy %>% pull(get(c))))
+
+              phy <- phy %>%
+                dplyr::filter(is.na(get(c))) %>%
+                dplyr::mutate(!!c := (phy[NAl, ] %>% pull(get(str_replace_all(c, "center", "mean"))))) %>%
+                rbind(phy %>%
+                        dplyr::filter(!is.na(get(c)))) %>%
+                arrange(id)
+            } else if (str_replace_all(c, "center", "mean_1p.mean") %in% all_cols & any(is.na(phy %>% pull(get(c))))) {
+              NAl <- which(is.na(phy %>% pull(get(c))))
+
+              phy <- phy %>%
+                dplyr::filter(is.na(get(c))) %>%
+                dplyr::mutate(!!c := (phy[NAl, ] %>% pull(get(str_replace_all(c, "center", "mean_1p.mean"))))) %>%
+                rbind(phy %>%
+                        dplyr::filter(!is.na(get(c)))) %>%
+                arrange(id)
+            }
+          }
+
+          return(phy %>%
+                   # dplyr::mutate(file_set = f) %>%
+                   # st_simplify() %>%
+                   st_cast() %>%
+                   st_transform(crs = st_crs(out)))
+        } else {
+          return(NULL)
+        }
+      })
+    }
 
     i <- 1
     while (i <= length(out_grid)) {

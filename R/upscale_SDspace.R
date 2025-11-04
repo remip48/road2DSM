@@ -1,19 +1,14 @@
 #' Calculate SDspace in addition to return center and SDtime over a prediction grid
 #'
 #' Can be used on files from extract_grid (prediction grids, that were possibly upscaled by upscale_grid or created by creategrid). Calculate SDspace only on columns that contain ".center", as returned by extract_nc. Return all columns from the initial grid.
+#' return SDspace variables are called as paste0(centers, ".SDspace_", pixel.radius, "p") where center is the name of the variable center column (e.g. SST.center_1d)
 #'
-#' @param nc.path
-#' @param list_variable
-#' @param nc_files
 #' @param all_pixel.radius
-#' @param all_time.period
-#' @param dates
-#' @param lonmin
-#' @param latmin
-#' @param lonmax
-#' @param latmax
 #' @param n_cores
 #' @param outfile
+#' @param file_directory
+#' @param writing_directory
+#' @param variables variables to calculate SDspace. Let null if you want all variables with .center to be calculated.
 #'
 #' @return
 #' @importFrom foreach %dopar%
@@ -22,11 +17,20 @@
 #' @export
 #'
 #' @examples
-upscale_SDspace <- function (file_directory, writing_directory, all_pixel.radius,
-                            n_cores = NULL, outfile = "log.txt")
+upscale_SDspace <- function (file_directory, writing_directory, all_pixel.radius, variables = NULL,
+                             n_cores = NULL, outfile = "log.txt")
 {
 
   list_files <- list.files(file_directory)
+
+  list_files <- list_files[str_detect(list_files, fixed(".rds")) & str_detect(list_files, fixed("prediction_grid_"))]
+
+  static_grid <- read_sf(paste0(file_directory, "/prediction_static_grid.shp"))
+
+  write_sf(static_grid,
+           paste0(writing_directory, "/prediction_static_grid.shp"))
+
+  rm(static_grid)
 
   if (is.null(n_cores)) {
     n_cores <- detectCores() * 2/4
@@ -42,7 +46,7 @@ upscale_SDspace <- function (file_directory, writing_directory, all_pixel.radius
 
   try({
     all_run <- foreach(lf = list_files, .packages = c("stringr", "dplyr", "data.table", "collapse", "purrr"),
-                       .noexport = ls()[!(ls() %in% c("file_directory", "writing_directory", "all_pixel.radius"))]) %dopar%
+                       .noexport = ls()[!(ls() %in% c("file_directory", "writing_directory", "all_pixel.radius", "variables"))]) %dopar%
       {
         x <- str_split_1(lf, "_")
         file_to_save <- paste0(paste(x[-length(x)], collapse = "_"), "_SDspace_", last(x))
@@ -58,6 +62,14 @@ upscale_SDspace <- function (file_directory, writing_directory, all_pixel.radius
             dplyr::mutate(id_nc = id)
 
           centers <- colnames(data.var_ref)[str_detect(colnames(data.var_ref), "center")]
+
+          if (any(!is.null(variables))) {
+            centers <- na.omit(do.call("c", lapply(centers, function(c) {
+              ifelse(any(str_detect(c, fixed(paste0(variables, ".")))),
+                     c,
+                     NA)
+            })))
+          }
 
           listX <- unique(data.var_ref$X)
           listY <- unique(data.var_ref$Y)
@@ -82,7 +94,7 @@ upscale_SDspace <- function (file_directory, writing_directory, all_pixel.radius
                                        bind_rows())
                             }) %>% group_by(id) %>%
               dplyr::reframe(id_nc = str_split_1(id_nc, ",")) %>%
-              dplyr::mutate(across(colnames(.), ~as.numeric(.x))) %>%
+              dplyr::mutate(across(colnames(.), ~ as.numeric(.x))) %>%
               left_join(data.var_ref %>%
                           dplyr::select(id_nc, all_of(centers)), by = "id_nc",
                         relationship = "many-to-many")
