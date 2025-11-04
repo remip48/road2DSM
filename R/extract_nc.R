@@ -22,10 +22,7 @@
 #' @importFrom foreach foreach
 #' @import data.table
 #' @importFrom data.table .SD .N :=
-NULL
-
-utils::globalVariables(c(".", ".N", ".SD", ":="))
-
+#'
 #' @export
 #'
 #' @examples
