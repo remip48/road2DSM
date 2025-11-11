@@ -16,6 +16,7 @@
 #' @param n_cores
 #' @param outfile
 #' @param Number_starting_name_file_set
+#' @param resolution
 #'
 #' @return
 #' @importFrom foreach %dopar%
@@ -28,7 +29,7 @@
 #' @examples
 
 
-extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
+extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius, resolution = "day",
                         all_time.period, dates, lonmin = -Inf, latmin = -Inf, lonmax = Inf,
                         latmax = Inf, Number_starting_name_file_set = 1, n_cores = NULL, outfile = "log.txt")
 {
@@ -82,12 +83,32 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
     stop("At least one date to extract is prior to one NC file's starting date. The function will fail.")
   }
 
+  if (any(as.character(lubridate::as_date(min(dates)) - ifelse(resolution == "day",
+                                                               lubridate::days(max(all_time.period - 1)),
+                                                               ifelse(resolution == "month",
+                                                                      lubridate::months(max(all_time.period - 1)),
+                                                                      NA))) < min(as.character(nc_files$date_start), na.rm = T))) {
+    warning("Are you sure the periods calculated for SDtime are inside NCDF file timeframes for every dates to extract ?")
+  }
+
+  if (resolution == "month" & any(as.numeric(lubridate::day(dates)) != 15)) {
+    stop("Please label all dates as the 15th of the month for resolution = month")
+  }
+
+  if (resolution == "month" & any(as.numeric(lubridate::day(nc_files$date_start)) != 15)) {
+    stop("Please label all nc_files$date_start as the 15th of the month for resolution = month")
+  }
+
+  if (resolution == "month" & any(as.numeric(lubridate::day(nc_files$date_end)) != 15)) {
+    stop("Please label all nc_files$date_end as the 15th of the month for resolution = month")
+  }
+
   cl <- makeCluster(ifelse(is.null(n_cores), detectCores() *
                              2/4, n_cores))
   registerDoParallel(cl)
   nc_filesi <- do.call("rbind", foreach(i = 1:nrow(nc_files),
                                         .packages = c("ncdf4", "stringr", "timeDate", "dplyr"),
-                                        .noexport = ls()[!(ls() %in% c("nc.path", "nc_files"))]) %dopar%
+                                        .noexport = ls()[!(ls() %in% c("nc.path", "nc_files", "resolution"))]) %dopar%
                          {
                            out <- nc_open(file.path(nc.path, nc_files$file[i]))
                            names <- names(out$var)
@@ -95,7 +116,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                            time_var <- dim[str_detect(tolower(dim), "time")]
                            lt <- length(ncvar_get(out, time_var))
                            dt <- length(as.character(timeSequence(from = nc_files$date_start[i],
-                                                                  to = nc_files$date_end[i], by = "day")))
+                                                                  to = nc_files$date_end[i], by = resolution)))
                            if (lt != dt) {
                              cat("Number of days in", nc_files$file[i], "entered (",
                                  dt, ") is different from the NC file (", dt,

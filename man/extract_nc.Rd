@@ -9,6 +9,7 @@ extract_nc(
   list_variable,
   nc_files,
   all_pixel.radius,
+  resolution = "day",
   all_time.period,
   dates,
   lonmin = -Inf,
@@ -21,7 +22,7 @@ extract_nc(
 )
 }
 \arguments{
-\item{Number_starting_name_file_set}{}
+\item{resolution}{}
 }
 \description{
 On the grid saved in this nc file. SDspace, SDtime and mean can be extracted as well.
