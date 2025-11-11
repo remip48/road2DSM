@@ -299,7 +299,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
   rmd_text <- c(
     rmd_text,
-    paste0("```{r best_models", i, ", echo=FALSE}"),
+    paste0("```{r best_models, echo=FALSE}"),
     paste(deparse(chunk_modeli_p1), collapse = "\n"),
     "```"
   )
