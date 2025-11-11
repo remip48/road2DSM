@@ -79,7 +79,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
   }
 
   if (any(as.character(dates) < min(as.character(nc_files$date_start), na.rm = T))) {
-    warning("At least one date to extract is prior to one NC file's starting date. The function will fail.")
+    stop("At least one date to extract is prior to one NC file's starting date. The function will fail.")
   }
 
   cl <- makeCluster(ifelse(is.null(n_cores), detectCores() *

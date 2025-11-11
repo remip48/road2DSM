@@ -59,7 +59,7 @@ run_all_DSM <- function (segdata_obs,
                          bs = "cs", # bs to use for the predictors. If spline_by is numeric and by_te = T, must be of length = length(spline_by) + 1. First element is used for bs of predictors, nexts are used for spline_by variables. You can set bs = "fs" or bs = "cs" for spline_by, which will be adapted correctly in the code.
                          # spatial_options = list(by = NULL, complexity = NA), # to use te(X, Y)
                          spline_to_add = NULL, # any spline to add to the model. It will be added as such in the model and values wont be scaled.
-                         soap = list(bnd = NULL, knots = NULL, coordinates = c("X", "Y")),
+                         soap = list(bnd = NULL, knots = NULL, coordinates = c("X", "Y"), by = NULL),
                          max_correlation = 0.5,
                          use_loo = FALSE, # if model selection is used based on LOO (TRUE) or on AIC (FALSE)
                          # random = NULL, # random effect to add.
@@ -313,6 +313,8 @@ run_all_DSM <- function (segdata_obs,
   # xt <- soap$xt
   bnd <- soap$bnd
 
+  assertthat::assert_that(is.factor(soap$by))
+
   # if (is.null(by_complexity)) {
   #   by_complexity <- complexity
   # }
@@ -520,7 +522,11 @@ run_all_DSM <- function (segdata_obs,
   # }
   intercept <- paste0("~ 1",
                       ifelse(all(!is.null(bnd)),
-                             paste0(" + s(", soap$coordinates[1], ", ", soap$coordinates[2], ", bs = 'so', xt = list(bnd = bnd))"),
+                             paste0(" + s(", soap$coordinates[1], ", ", soap$coordinates[2],
+                                    ifelse(all(!is.null(soap$by)),
+                                           paste0(", by = ", soap$by),
+                                           ""),
+                                    ", bs = 'so', xt = list(bnd = bnd))"),
                              ""),
                       ifelse(!is.null(spline_to_add),
                              paste0(" + ", spline_to_add),

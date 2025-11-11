@@ -28,7 +28,7 @@ backward_selection <- function(variable,
                                seg_data,
                                response,
                                spline_to_add = NULL, # can be static or anything else that wont be part of the selection and in all models
-                               soap = list(bnd = NULL, knots = NULL, coordinates = c("X", "Y")),
+                               soap = list(bnd = NULL, knots = NULL, coordinates = c("X", "Y"), by = NULL),
                                offset_effort = "effort_km2",
                                treshold_discrete = 25,
                                max_correlation = .5,
@@ -39,6 +39,8 @@ backward_selection <- function(variable,
 
   bnd <- soap$bnd
   knots <- soap$knots
+
+  assertthat::assert_that(is.factor(soap$by))
 
   if (!is.null(spline_to_add)) {
     cat(spline_to_add, "will be added to the model, be values wont be scaled contrary to the predictors used in 'variable'.\n")
@@ -79,7 +81,11 @@ backward_selection <- function(variable,
 
   model <- paste0(response, " ~ 1 + ",
                   ifelse(all(!is.null(bnd)),
-                         paste0("s(", soap$coordinates[1], ", ", soap$coordinates[2], ", bs = 'so', xt = list(bnd = bnd)) + "),
+                         paste0("s(", soap$coordinates[1], ", ", soap$coordinates[2],
+                                ifelse(all(!is.null(soap$by)),
+                                       paste0(", by = ", soap$by),
+                                       ""),
+                                ", bs = 'so', xt = list(bnd = bnd)) + "),
                          ""),
                   # paste(paste0("s(", covariates, ", bs = 'cs', k = 10)"), collapse = " + "),
                   paste(smoother(variable = covariates, bs = bs, complexity = complexity), collapse = " + "),

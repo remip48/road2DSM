@@ -16,7 +16,7 @@ run_all_DSM(
   complexity = 10,
   bs = "cs",
   spline_to_add = NULL,
-  soap = list(bnd = NULL, knots = NULL, coordinates = c("X", "Y")),
+  soap = list(bnd = NULL, knots = NULL, coordinates = c("X", "Y"), by = NULL),
   max_correlation = 0.5,
   use_loo = FALSE,
   offset_effort = "effort_km2",

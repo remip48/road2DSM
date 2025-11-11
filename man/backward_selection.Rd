@@ -15,7 +15,7 @@ backward_selection(
   seg_data,
   response,
   spline_to_add = NULL,
-  soap = list(bnd = NULL, knots = NULL, coordinates = c("X", "Y")),
+  soap = list(bnd = NULL, knots = NULL, coordinates = c("X", "Y"), by = NULL),
   offset_effort = "effort_km2",
   treshold_discrete = 25,
   max_correlation = 0.5,
