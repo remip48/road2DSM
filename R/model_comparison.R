@@ -204,14 +204,14 @@ model_comparison <- function(run_models, # output from run_all_DSM
   ##############
   chunk_best_models <- quote({
     knitr::kable(run_models$all_fits_binded[1:length(run_models$best_models), ] %>%
-            dplyr::select(-c(index, ResDev, NulDev, Convergence)) %>%
-            dplyr::mutate(model = 1:n(),
-                          stacking_weights = round(stacking_weights, 3),
-                          AIC = round(AIC, 2),
-                          RMSE = round(RMSE, 3),
-                          looic = round(looic, 3),
-                          se_looic = round(se_looic, 3)) %>%
-            as.data.frame())
+                   dplyr::select(-c(index, ResDev, NulDev, Convergence)) %>%
+                   dplyr::mutate(model = 1:n(),
+                                 stacking_weights = round(stacking_weights, 3),
+                                 AIC = round(AIC, 2),
+                                 RMSE = round(RMSE, 3),
+                                 looic = round(looic, 3),
+                                 se_looic = round(se_looic, 3)) %>%
+                   as.data.frame())
   })
   ##############
   # Construct R Markdown text
@@ -233,8 +233,12 @@ model_comparison <- function(run_models, # output from run_all_DSM
     "```"
   )
 
-  for (i in 1:length(run_models$best_models)) {
-    chunk_modeli_p1 <- quote({
+  chunk_modeli_p1 <- quote({
+    for (i in 1:length(run_models$best_models)) {
+
+      cat("<br>\n")
+      cat(paste0("## Model ", i, "\n<br>"))
+
       print(summary(run_models$best_models[[i]]))
       if (str_detect(as.character(run_models$best_models[[i]]$formula)[3], fixed("bs = \"so\", xt = list(bnd = bnd)"))) {
         (plot(run_models$best_models[[i]], select = 1))
@@ -243,21 +247,12 @@ model_comparison <- function(run_models, # output from run_all_DSM
         print(gratia::draw(run_models$best_models4plotting[[i]], rug = F))
       }
       mgcv::qq.gam(run_models$best_models4plotting[[i]], rep = 1000)
-    })
 
-    rmd_text <- c(
-      rmd_text,
-      "",
-      paste0("## Model ", i),
-      paste0("```{r best_models_p1", i, ", echo=FALSE}"),
-      paste(deparse(chunk_modeli_p1), collapse = "\n"),
-      "```",
-      "",
-      paste0("#### ASPE & Ratio of the number of observed ", ifelse(str_detect(response, "group"), "groups", "individuals"),
-             " / number of predicted ", ifelse(str_detect(response, "group"), "groups", "individuals"))
-    )
+      cat("<br>\n")
+      cat(paste0("#### ASPE & Ratio of the number of observed ", ifelse(str_detect(response, "group"), "groups", "individuals"),
+                 " / number of predicted ", ifelse(str_detect(response, "group"), "groups", "individuals"),
+                 "<br>\n"))
 
-    chunk_modeli <- quote({
       p <- predict(run_models$best_models[[i]], newdata=calibdata, type='response')
       dens <-as.numeric(p)
       obs_n <- calibdata %>%
@@ -299,15 +294,15 @@ model_comparison <- function(run_models, # output from run_all_DSM
       }
 
       print(rootg)
-    })
+    }
+  })
 
-    rmd_text <- c(
-      rmd_text,
-      paste0("```{r best_models", i, ", echo=FALSE}"),
-      paste(deparse(chunk_modeli), collapse = "\n"),
-      "```"
-    )
-  }
+  rmd_text <- c(
+    rmd_text,
+    paste0("```{r best_models", i, ", echo=FALSE}"),
+    paste(deparse(chunk_modeli_p1), collapse = "\n"),
+    "```"
+  )
 
   static <- read_sf(paste0(grid_folder, "/", static_grid)) %>%
     st_transform(crs = 3035)
@@ -508,22 +503,22 @@ model_comparison <- function(run_models, # output from run_all_DSM
   ##############
   run_preds_chunk_dates <- quote({
     knitr::kable(data.frame(date = sort(dates)) %>%
+                   dplyr::mutate(Year = as.character(lubridate::year(date))) %>%
+                   group_by(Year) %>%
+                   dplyr::summarise(From = min(date),
+                                    To = max(date)) %>%
+                   ungroup(),
+                 caption = "Dates used for prediction:")
+  })
+
+  run_preds_chunk <- quote({
+    (knitr::kable(data.frame(date = sort(dates)) %>%
                     dplyr::mutate(Year = as.character(lubridate::year(date))) %>%
                     group_by(Year) %>%
                     dplyr::summarise(From = min(date),
                                      To = max(date)) %>%
                     ungroup(),
-                  caption = "Dates used for prediction:")
-    })
-
-  run_preds_chunk <- quote({
-    (knitr::kable(data.frame(date = sort(dates)) %>%
-                         dplyr::mutate(Year = as.character(lubridate::year(date))) %>%
-                         group_by(Year) %>%
-                         dplyr::summarise(From = min(date),
-                                          To = max(date)) %>%
-                         ungroup(),
-                       caption = "Dates used for prediction:"))
+                  caption = "Dates used for prediction:"))
 
     to_runm_files <- paste0("model", na.omit(c(to_runmi, to_runm)))
 
@@ -1536,24 +1531,24 @@ model_comparison <- function(run_models, # output from run_all_DSM
           #   #                                                                          version_preds, "_biascorrected_results_Model_", i, ".shp)"),
           #   #     "\n")
           # } else {
-            # cat("Saving bias-corrected results from Model", i, "under", paste0(GridDir, "/", version_preds, "_biascorrected_results_Model_", i, ".shp"),
-            #     "\n")
+          # cat("Saving bias-corrected results from Model", i, "under", paste0(GridDir, "/", version_preds, "_biascorrected_results_Model_", i, ".shp"),
+          #     "\n")
 
-            write_sf(pred_grid_cent %>%
-                       left_join(summary_abund_percell %>%
-                                   dplyr::select(id, Abundance, CVaa, Low95, Up95),
-                                 by = "id") %>%
-                       dplyr::filter(!is.na(CVaa)) %>%
-                       dplyr::select(id, areakm2, Abundance, CVaa, Low95, Up95) %>%
-                       left_join(bias_percell %>%
-                                   dplyr::select(id, bias), by = "id") %>%
-                       dplyr::rename(CV = CVaa,
-                                     Corrected_bias = bias) %>%
-                       st_cast(),
-                     paste0(GridDir, "/", version_preds, "_biascorrected_results_Model_", i, ".gpkg"),
-                     append = F
-                     #ifelse(run_all, FALSE, NA)
-            )
+          write_sf(pred_grid_cent %>%
+                     left_join(summary_abund_percell %>%
+                                 dplyr::select(id, Abundance, CVaa, Low95, Up95),
+                               by = "id") %>%
+                     dplyr::filter(!is.na(CVaa)) %>%
+                     dplyr::select(id, areakm2, Abundance, CVaa, Low95, Up95) %>%
+                     left_join(bias_percell %>%
+                                 dplyr::select(id, bias), by = "id") %>%
+                     dplyr::rename(CV = CVaa,
+                                   Corrected_bias = bias) %>%
+                     st_cast(),
+                   paste0(GridDir, "/", version_preds, "_biascorrected_results_Model_", i, ".gpkg"),
+                   append = F
+                   #ifelse(run_all, FALSE, NA)
+          )
           # }
         }
 
