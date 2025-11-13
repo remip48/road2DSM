@@ -314,7 +314,7 @@ run_all_DSM <- function (segdata_obs,
   bnd <- soap$bnd
 
   if (!is.null(soap$by)) {
-    assertthat::assert_that(is.factor(soap$by))
+    assertthat::assert_that(is.factor(segdata_obs %>% dplyr::pull(soap$by)))
   }
 
   # if (is.null(by_complexity)) {
