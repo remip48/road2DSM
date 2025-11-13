@@ -16,16 +16,17 @@ extract_nc(
   latmin = -Inf,
   lonmax = Inf,
   latmax = Inf,
-  name_dimension = list(longitude = "lon", latitude = "lat", time = NULL, depth = NULL),
+  name_dimension = list(lon = "lon", lat = "lat", time = NULL, depth = NULL),
   max_depth = Inf,
   vertical_variables = NULL,
   Number_starting_name_file_set = 1,
+  rename_dimensions = list(lon = NULL, lat = NULL, time = NULL, depth = NULL),
   n_cores = NULL,
   outfile = "log.txt"
 )
 }
 \arguments{
-\item{max_depth}{}
+\item{rename_dimensions}{}
 }
 \description{
 On the grid saved in this nc file. SDspace, SDtime and mean can be extracted as well.
