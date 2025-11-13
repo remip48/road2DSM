@@ -143,7 +143,7 @@ extract_grid <- function(grid,
           }
 
           all_cols <- do.call("c", lapply(colnames(phy), function(c) {
-            if (any(str_detect(c, variable))) {c} else {NULL}
+            if (any(str_detect(c, fixed(variable)))) {c} else {NULL}
           }))
 
           for (c in all_cols[str_detect(all_cols, fixed(".center"))]) {
@@ -277,7 +277,7 @@ extract_grid <- function(grid,
 
         all_cols <- do.call("c", lapply(out_grid, function(x) {
           do.call("c", lapply(colnames(x), function(c) {
-            if (any(str_detect(c, variable))) {c} else {NULL}
+            if (any(str_detect(c, fixed(variable)))) {c} else {NULL}
           }))
         }))
 

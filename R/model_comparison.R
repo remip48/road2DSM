@@ -236,8 +236,8 @@ model_comparison <- function(run_models, # output from run_all_DSM
   chunk_modeli_p1 <- quote({
     for (i in 1:length(run_models$best_models)) {
 
-      cat("<br>\n")
-      cat(paste0("## Model ", i, "\n<br>"))
+      cat("\n\n")
+      cat(paste0("## Model ", i, "\n\n"))
 
       print(summary(run_models$best_models[[i]]))
       if (str_detect(as.character(run_models$best_models[[i]]$formula)[3], fixed("bs = \"so\", xt = list(bnd = bnd)"))) {
@@ -248,10 +248,10 @@ model_comparison <- function(run_models, # output from run_all_DSM
       }
       mgcv::qq.gam(run_models$best_models4plotting[[i]], rep = 1000)
 
-      cat("<br>\n")
+      cat("\n\n")
       cat(paste0("#### ASPE & Ratio of the number of observed ", ifelse(str_detect(response, "group"), "groups", "individuals"),
                  " / number of predicted ", ifelse(str_detect(response, "group"), "groups", "individuals"),
-                 "<br>\n"))
+                 "\n"))
 
       p <- predict(run_models$best_models[[i]], newdata=calibdata, type='response')
       dens <-as.numeric(p)

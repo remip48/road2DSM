@@ -40,7 +40,9 @@ backward_selection <- function(variable,
   bnd <- soap$bnd
   knots <- soap$knots
 
-  assertthat::assert_that(is.factor(soap$by))
+  if (!is.null(soap$by)) {
+    assertthat::assert_that(is.factor(soap$by))
+  }
 
   if (!is.null(spline_to_add)) {
     cat(spline_to_add, "will be added to the model, be values wont be scaled contrary to the predictors used in 'variable'.\n")

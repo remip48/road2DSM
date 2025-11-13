@@ -17,6 +17,9 @@
 #' @param outfile
 #' @param Number_starting_name_file_set
 #' @param resolution
+#' @param name_dimension
+#' @param vertical_variables
+#' @param max_depth
 #'
 #' @return
 #' @importFrom foreach %dopar%
@@ -31,51 +34,74 @@
 
 extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius, resolution = "day",
                         all_time.period, dates, lonmin = -Inf, latmin = -Inf, lonmax = Inf,
-                        latmax = Inf, Number_starting_name_file_set = 1, n_cores = NULL, outfile = "log.txt")
+                        latmax = Inf, name_dimension = list(longitude = "lon",
+                                                            latitude = "lat",
+                                                            time = NULL,
+                                                            depth = NULL),
+                        max_depth = Inf,
+                        vertical_variables = NULL,
+                        Number_starting_name_file_set = 1, n_cores = NULL, outfile = "log.txt")
 {
   if (any(is.na(dates))) {
     stop("There is NA in the 'dates' object")
   }
-  order_dim <- function(infos_dimensions, lon, lat, depth,
-                        time, use_depth = T) {
+  order_dim <- function(infos_dimensions, dimensions, use_1value = T) {
     out <- c()
     for (i in infos_dimensions$dim) {
-      if (tolower(i) %in% c("lon", "longitude")) {
-        out <- c(out, lon)
+      if (use_1value | infos_dimensions$n_values[infos_dimensions$dim == i] > 1) {
+        out <- c(out, dimensions[[i]])
       }
-      else if (tolower(i) %in% c("lat", "latitude")) {
-        out <- c(out, lat)
-      }
-      else if (tolower(i) %in% c("time", "t")) {
-        out <- c(out, time)
-      }
-      else if (tolower(i) %in% c("depth", "d") & use_depth) {
-        out <- c(out, depth)
-      }
+
+      # if (tolower(i) %in% c("lon", "longitude")) {
+      #   out <- c(out, lon)
+      # }
+      # else if (tolower(i) %in% c("lat", "latitude")) {
+      #   out <- c(out, lat)
+      # }
+      # else if (tolower(i) %in% c("time", "t")) {
+      #   out <- c(out, time)
+      # }
+      # else if (tolower(i) %in% c("depth", "d") & use_1value) {
+      #   out <- c(out, depth)
+      # }
     }
     return(out)
   }
-  create_dim <- function(infos_dimensions, lon, lat, depth,
-                         time) {
+  create_dim <- function(infos_dimensions, dimensions) {
     out <- data.frame(init = NA)[-1]
     for (i in rev(infos_dimensions$dim)) {
-      if (tolower(i) %in% c("lon", "longitude")) {
-        out <- out %>% group_by(across(all_of(colnames(out)))) %>%
-          dplyr::reframe(lon = lon)
+      out <- out %>%
+        group_by(across(all_of(colnames(out)))) %>%
+        dplyr::reframe(!!i := dimensions[[i]])
+      # if (tolower(i) %in% c("lon", "longitude")) {
+      #   out <- out %>% group_by(across(all_of(colnames(out)))) %>%
+      #     dplyr::reframe(lon = lon)
+      # }
+      # else if (tolower(i) %in% c("lat", "latitude")) {
+      #   out <- out %>% group_by(across(all_of(colnames(out)))) %>%
+      #     dplyr::reframe(lat = lat)
+      # }
+      # else if (tolower(i) %in% c("depth", "d")) {
+      #   out <- out %>% group_by(across(all_of(colnames(out)))) %>%
+      #     dplyr::reframe(d = depth)
+      # }
+      # else if (tolower(i) %in% c("time", "t")) {
+      #   out <- out %>% group_by(across(all_of(colnames(out)))) %>%
+      #     dplyr::reframe(t = time)
+      # }
+
+      if (i == name_dimension[["lon"]]) {
+        colnames(out)[colnames(out) == i] <- "lon"
+      } else if (i == name_dimension[["lat"]]) {
+        colnames(out)[colnames(out) == i] <- "lat"
+      } else if (i == name_dimension[["time"]]) {
+        colnames(out)[colnames(out) == i] <- "t"
+      } else if (i == name_dimension[["depth"]]) {
+        colnames(out)[colnames(out) == i] <- "d"
       }
-      else if (tolower(i) %in% c("lat", "latitude")) {
-        out <- out %>% group_by(across(all_of(colnames(out)))) %>%
-          dplyr::reframe(lat = lat)
-      }
-      else if (tolower(i) %in% c("depth", "d")) {
-        out <- out %>% group_by(across(all_of(colnames(out)))) %>%
-          dplyr::reframe(d = depth)
-      }
-      else if (tolower(i) %in% c("time", "t")) {
-        out <- out %>% group_by(across(all_of(colnames(out)))) %>%
-          dplyr::reframe(t = time)
-      }
+
     }
+
     return(out)
   }
 
@@ -86,7 +112,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius, reso
   if (any(as.character(lubridate::as_date(min(dates)) - ifelse(resolution == "day",
                                                                lubridate::days(max(all_time.period - 1)),
                                                                ifelse(resolution == "month",
-                                                                      lubridate::months(max(all_time.period - 1)),
+                                                                      months(max(all_time.period - 1)),
                                                                       NA))) < min(as.character(nc_files$date_start), na.rm = T))) {
     warning("Are you sure the periods calculated for SDtime are inside NCDF file timeframes for every dates to extract ?")
   }
@@ -108,13 +134,22 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius, reso
   registerDoParallel(cl)
   nc_filesi <- do.call("rbind", foreach(i = 1:nrow(nc_files),
                                         .packages = c("ncdf4", "stringr", "timeDate", "dplyr"),
-                                        .noexport = ls()[!(ls() %in% c("nc.path", "nc_files", "resolution"))]) %dopar%
+                                        .noexport = ls()[!(ls() %in% c("nc.path", "nc_files", "resolution", "name_dimension"))]) %dopar%
                          {
                            out <- nc_open(file.path(nc.path, nc_files$file[i]))
                            names <- names(out$var)
                            dim <- names(out$dim)
-                           time_var <- dim[str_detect(tolower(dim), "time")]
-                           lt <- length(ncvar_get(out, time_var))
+                           time_var <- dim[dim == name_dimension["time"]]
+                           if (length(time_var) == 1) {
+                             lt <- length(ncvar_get(out, time_var))
+                           } else {
+                             time_var <- names[names == name_dimension["time"]]
+                             if (length(time_var) == 1) {
+                               lt <- length(ncvar_get(out, time_var))
+                             } else {
+                               lt <- 1
+                             }
+                           }
                            dt <- length(as.character(timeSequence(from = nc_files$date_start[i],
                                                                   to = nc_files$date_end[i], by = resolution)))
                            if (lt != dt) {
@@ -266,8 +301,13 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius, reso
       out <- ncinfoi[i, ] %>%
         left_join(map_dfr(v, function(x) {
           map_dfr(x$dim, function(d) {
-            return(data.frame(variable = x$name, dim = d$name,
-                              n_values = length(d$vals)))
+            if (d == name_dimension[["depth"]] & max_depth < Inf) {
+              return(data.frame(variable = x$name, dim = d$name,
+                                n_values = length(d$vals[d$vals <= max_depth])))
+            } else {
+              return(data.frame(variable = x$name, dim = d$name,
+                                n_values = length(d$vals)))
+            }
           })
         }) %>%
           dplyr::mutate(nc.name = ncinfoi$nc.name[i]),
@@ -282,35 +322,59 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius, reso
       datafile <- paste(nc.path, first(ncinfoi$nc.name[ncinfoi$file_set == f]), sep = "/")
       nc.data <- nc_open(datafile)
       namedims <- names(nc.data$dim)
-      lat <- ncvar_get(nc.data, namedims[str_detect(namedims,
-                                                    "lat")])
-      lon <- ncvar_get(nc.data, namedims[str_detect(namedims,
-                                                    "lon")])
+      test <- try({
+        lat <- c(unique(as.vector(ncvar_get(nc.data, namedims[namedims == name_dimension["lat"]]))))
+        lon <- c(unique(as.vector(ncvar_get(nc.data, namedims[namedims == name_dimension["lon"]]))))
+      })
+
+      if (all(class(test) == "try-error")) {
+        namedims <- names(nc.data$var)
+        test <- try({
+          lat <- c(unique(as.vector(ncvar_get(nc.data, namedims[namedims == name_dimension["lat"]]))))
+          lon <- c(unique(as.vector(ncvar_get(nc.data, namedims[namedims == name_dimension["lon"]]))))
+        })
+      }
+
       ref_c <- first(match(infos_dim %>% dplyr::mutate(id = 1:n()) %>%
                              group_by(nc.name, variable) %>% dplyr::mutate(n_dim = length(unique(dim))) %>%
                              ungroup() %>% dplyr::slice_max(n_dim) %>% dplyr::slice_min(id) %>%
                              pull(variable), ncinfoi$variable))
       data <- map_dfr(match(infos_dim %>% pull(variable) %>%
                               unique(), ncinfoi$variable), function(i) {
+                                infos_dimi <- infos_dim %>% dplyr::filter(variable ==
+                                                              ncinfoi$variable[ref_c] & nc.name == ncinfoi$nc.name[ref_c])
+
                                 data.var <- try(ncvar_get(nc.data, ncinfoi$variable[i],
-                                                          start = order_dim(infos_dim %>% dplyr::filter(variable ==
-                                                                                                          ncinfoi$variable[ref_c] & nc.name == ncinfoi$nc.name[ref_c]),
-                                                                            lon = 1, lat = 1, depth = 1, time = 1), count = order_dim(infos_dim %>%
-                                                                                                                                        dplyr::filter(variable == ncinfoi$variable[ref_c] &
-                                                                                                                                                        nc.name == ncinfoi$nc.name[ref_c]), lon = length(lon),
-                                                                                                                                      lat = length(lat), depth = 1, time = 1),
+                                                          start = order_dim(infos_dimi,
+                                                                            dimensions = set_names(map(infos_dimi$dim, function(x) {1}), infos_dimi$dim)),
+
+                                                          count = order_dim(infos_dimi,
+                                                                            dimensions = set_names(map(infos_dimi$dim, function(x) {
+                                                                              ifelse(x %in% c(name_dimension[["lat"]], name_dimension[["lon"]]),
+                                                                                     infos_dimi %>%
+                                                                                       dplyr::filter(dim == x) %>%
+                                                                                       pull(n_values),
+                                                                                     1)
+                                                                              }), infos_dimi$dim)),
                                                           verbose = FALSE))
                                 if (all(class(data.var) == "try-error")) {
                                   cat("Trying to remove depth. If Time should be removed instead of depth, please adapt the function script.\n")
                                   data.var <- ncvar_get(nc.data, ncinfoi$variable[i],
-                                                        start = order_dim(infos_dim %>% dplyr::filter(variable ==
-                                                                                                        ncinfoi$variable[ref_c] & nc.name == ncinfoi$nc.name[ref_c]),
-                                                                          lon = 1, lat = 1, depth = 1, time = 1, use_depth = F), count = order_dim(infos_dim %>%
-                                                                                                                                                     dplyr::filter(variable == ncinfoi$variable[ref_c] &
-                                                                                                                                                                     nc.name == ncinfoi$nc.name[ref_c]), lon = length(lon),
-                                                                                                                                                   lat = length(lat), depth = 1, time = 1, use_depth = F),
+                                                        start = order_dim(infos_dimi,
+                                                                          dimensions = set_names(map(infos_dimi$dim, function(x) {1}), infos_dimi$dim)),
+
+                                                        count = order_dim(infos_dimi,
+                                                                          dimensions = set_names(map(infos_dimi$dim, function(x) {
+                                                                            ifelse(x %in% c(name_dimension[["lat"]], name_dimension[["lon"]]),
+                                                                                   infos_dimi %>%
+                                                                                     dplyr::filter(dim == x) %>%
+                                                                                     pull(n_values),
+                                                                                   1)
+                                                                          }), infos_dimi$dim),
+                                                                          use_1value = F),
                                                         verbose = FALSE)
                                 }
+
                                 if (dim(data.var)[1] == length(lon) & dim(data.var)[2] ==
                                     length(lat)) {
                                   if (lat[1] < lat[2]) {
@@ -364,6 +428,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius, reso
     data <- new_grid %>% st_drop_geometry() %>% dplyr::select(lon_cent,
                                                               lat_cent, id)
     Predictor.name_ref <- variable
+
     gc()
     if (!dir.exists(paste0(nc.path, "/", f))) {
       dir.create(paste0(nc.path, "/", f))
@@ -402,10 +467,10 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius, reso
     try({
       all_run <- foreach(dt = 1:nrow(dates), .packages = c("purrr", "rlang",
                                                            "dplyr", "timeDate", "ncdf4", "stringr", "data.table",
-                                                           "collapse"), .noexport = ls()[!(ls() %in% c("data", "llon", "llat", "dlon", "dlat",
+                                                           "collapse"), .noexport = ls()[!(ls() %in% c("data", "llon", "llat", "dlon", "dlat", "max_depth",
                                                                                                        "ncinfoi", "nc.path", "expr", "order_dim", "create_dim",
-                                                                                                       "origin_all", "all_days_period_ref", "infos_dim",
-                                                                                                       "f", "all_pixel.radius", "pixel.radius", "pred.type",
+                                                                                                       "origin_all", "all_days_period_ref", "infos_dim", "name_dimension",
+                                                                                                       "f", "all_pixel.radius", "pixel.radius", "pred.type", "vertical_variables",
                                                                                                        "Predictor.name_ref", "all_time.period", "dates"))]) %dopar%
         {
           file_to_save <- paste0(nc.path, "/", f, "/",
@@ -433,26 +498,57 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius, reso
             }
             nc.data <- nc_open(datafile)
             namedims <- names(nc.data$dim)
-            lat <- ncvar_get(nc.data, namedims[str_detect(tolower(namedims),
-                                                          "lat")])
-            # lat <- do.call("c", lapply(lat, function(l) {
-            #   unique(data$lat_cent)[which.min(abs(unique(data$lat_cent) - l))]
-            # }))
-            lon <- ncvar_get(nc.data, namedims[str_detect(tolower(namedims),
-                                                          "lon")])
+            # lat <- ncvar_get(nc.data, namedims[str_detect(tolower(namedims),
+            #                                               "lat")])
+            # # lat <- do.call("c", lapply(lat, function(l) {
+            # #   unique(data$lat_cent)[which.min(abs(unique(data$lat_cent) - l))]
+            # # }))
+            # lon <- ncvar_get(nc.data, namedims[str_detect(tolower(namedims),
+            #                                               "lon")])
+
+            test <- try({
+              lat <- c(unique(as.vector(ncvar_get(nc.data, namedims[namedims == name_dimension["lat"]]))))
+              lon <- c(unique(as.vector(ncvar_get(nc.data, namedims[namedims == name_dimension["lon"]]))))
+            })
+
+            if (all(class(test) == "try-error")) {
+              namedims <- names(nc.data$var)
+              test <- try({
+                lat <- c(unique(as.vector(ncvar_get(nc.data, namedims[namedims == name_dimension["lat"]]))))
+                lon <- c(unique(as.vector(ncvar_get(nc.data, namedims[namedims == name_dimension["lon"]]))))
+              })
+            }
+
             # lon <- do.call("c", lapply(lon, function(l) {
             #   unique(data$lon_cent)[which.min(abs(unique(data$lon_cent) - l))]
             # }))
-            if (any(str_detect(tolower(namedims), "depth"))) {
-              depth <- ncvar_get(nc.data, namedims[str_detect(tolower(namedims),
-                                                              "depth")])
-            }
-            else {
+            namedims <- names(nc.data$dim)
+
+            if (!is.null(name_dimension[["depth"]])) {
+              depth <- ncvar_get(nc.data, namedims[namedims == name_dimension[["depth"]]])
+
+              if (all(class(depth) == "try-error")) {
+                namedims <- names(nc.data$var)
+                depth <- ncvar_get(nc.data, namedims[namedims == name_dimension[["depth"]]])
+              }
+            } else {
               depth = 0
             }
-            time <- ncvar_get(nc.data, namedims[str_detect(tolower(namedims),
-                                                           "time")])
-            time <- 0:(length(time) - 1)
+
+            depth <- depth[depth <= max_depth]
+            ##
+            # names <- names(nc.data$var)
+            # dim <- names(nc.data$dim)
+            time_var <- name_dimension[["time"]]
+            ##
+
+            if (length(time_var) > 0) {
+              time <- ncvar_get(nc.data, time_var)
+              time <- 0:(length(time) - 1)
+            } else {
+              time <- 0
+            }
+
             day.index <- which((time + 1) == SegDay)
             if (length(day.index) == 0) {
               print(paste("Not OK! Missing dates in nc file for: ",
@@ -467,25 +563,54 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius, reso
             Predictor.name <- Predictor.name_ref
 
             data.var_refi <- lapply(Predictor.name, function(pred) {
-              data.var_ref <- try(ncvar_get(nc.data, pred,
-                                            start = order_dim(infos_dim %>% dplyr::filter(variable ==
-                                                                                            pred & nc.name == ncfile), lon = 1,
-                                                              lat = 1, depth = 1, time = time1),
-                                            count = order_dim(infos_dim %>% dplyr::filter(variable ==
-                                                                                            pred & nc.name == ncfile), lon = nrows,
-                                                              lat = ncols, depth = length(depth),
-                                                              time = numtimes), verbose = FALSE))
+
+              infos_dimi <- infos_dim %>% dplyr::filter(variable == pred & nc.name == ncfile)
+
+              data.var <- try(ncvar_get(nc.data, pred,
+                                        start = order_dim(infos_dimi,
+                                                          dimensions = set_names(map(infos_dimi$dim, function(x) {
+                                                            ifelse(x %in% name_dimension[["time"]],
+                                                                   time1,
+                                                                   1)
+                                                          }), infos_dimi$dim)),
+
+                                        count = order_dim(infos_dimi,
+                                                          dimensions = set_names(map(infos_dimi$dim, function(x) {
+                                                            ifelse(x %in% name_dimension[["time"]],
+                                                                   numtimes,
+                                                                   ifelse(x %in% name_dimension[["depth"]],
+                                                                          length(depth),
+                                                                          infos_dimi %>%
+                                                                            dplyr::filter(dim == x) %>%
+                                                                            pull(n_values)))
+                                                          }), infos_dimi$dim)),
+                                        verbose = FALSE))
+
+              ###
 
               if (all(class(data.var_ref) == "try-error")) {
                 # cat("Trying to remove depth. If Time should be removed instead of depth, please adapt the function script.\n")
-                data.var_ref <- ncvar_get(nc.data, pred,
-                                          start = order_dim(infos_dim %>% dplyr::filter(variable ==
-                                                                                          pred & nc.name == ncfile), lon = 1,
-                                                            lat = 1, depth = 1, time = time1, use_depth = F),
-                                          count = order_dim(infos_dim %>% dplyr::filter(variable ==
-                                                                                          pred & nc.name == ncfile), lon = nrows,
-                                                            lat = ncols, depth = length(depth),
-                                                            time = numtimes, use_depth = F), verbose = FALSE)
+                data.var <- try(ncvar_get(nc.data, pred,
+                                          start = order_dim(infos_dimi,
+                                                            dimensions = set_names(map(infos_dimi$dim, function(x) {
+                                                              ifelse(x %in% name_dimension[["time"]],
+                                                                     time1,
+                                                                     1)
+                                                            }), infos_dimi$dim),
+                                                            use_1value = F),
+
+                                          count = order_dim(infos_dimi,
+                                                            dimensions = set_names(map(infos_dimi$dim, function(x) {
+                                                              ifelse(x %in% name_dimension[["time"]],
+                                                                     numtimes,
+                                                                     ifelse(x %in% name_dimension[["depth"]],
+                                                                            length(depth),
+                                                                            infos_dimi %>%
+                                                                              dplyr::filter(dim == x) %>%
+                                                                              pull(n_values)))
+                                                            }), infos_dimi$dim),
+                                                            use_1value = F),
+                                          verbose = FALSE))
               }
 
               if (any(all_days_period$period < prd)) {
@@ -496,8 +621,14 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius, reso
                 datafile1 <- paste(nc.path, ncfile1,
                                    sep = "/")
                 nc.data1 <- nc_open(datafile1)
-                time11 <- ncvar_get(nc.data1, "time")
-                time11 <- 0:(length(time11) - 1)
+
+                if (length(time_var) > 0) {
+                  time11 <- ncvar_get(nc.data1, time_var)
+                  time11 <- 0:(length(time11) - 1)
+                } else {
+                  time11 <- 0
+                }
+
                 SegDay1 <- length(as.character(timeSequence(from = ncinfoi$date_start[ncinfoi$period ==
                                                                                         last_period], to = last(all_days_period$date[all_days_period$period ==
                                                                                                                                        last_period]), by = "day")))
@@ -510,44 +641,131 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius, reso
                                               numtimes) + 1, 1)
                 numtimes11 <- min(max(all_time.period) -
                                     numtimes, day.index1)
-                data.var1 <- try(ncvar_get(nc.data1, pred,
-                                           start = order_dim(infos_dim %>% dplyr::filter(variable ==
-                                                                                           pred & nc.name == ncfile1), lon = 1,
-                                                             lat = 1, depth = 1, time = time11),
-                                           count = order_dim(infos_dim %>% dplyr::filter(variable ==
-                                                                                           pred & nc.name == ncfile1), lon = nrows,
-                                                             lat = ncols, depth = length(depth),
-                                                             time = numtimes11), verbose = FALSE))
+                #####
+                infos_dimi1 <- infos_dim %>% dplyr::filter(variable == pred & nc.name == ncfile1)
 
-                if (all(class(data.var1) == "try-error")) {
-                  data.var1 <- ncvar_get(nc.data1, pred,
-                                         start = order_dim(infos_dim %>% dplyr::filter(variable ==
-                                                                                         pred & nc.name == ncfile1), lon = 1,
-                                                           lat = 1, depth = 1, time = time11, use_depth = F),
-                                         count = order_dim(infos_dim %>% dplyr::filter(variable ==
-                                                                                         pred & nc.name == ncfile1), lon = nrows,
-                                                           lat = ncols, depth = length(depth),
-                                                           time = numtimes11, use_depth = F), verbose = FALSE)
+                data.var <- try(ncvar_get(nc.data1, pred,
+                                          start = order_dim(infos_dimi1,
+                                                            dimensions = set_names(map(infos_dimi1$dim, function(x) {
+                                                              ifelse(x %in% name_dimension[["time"]],
+                                                                     time11,
+                                                                     1)
+                                                            }), infos_dimi1$dim)),
+
+                                          count = order_dim(infos_dimi1,
+                                                            dimensions = set_names(map(infos_dimi1$dim, function(x) {
+                                                              ifelse(x %in% name_dimension[["time"]],
+                                                                     numtimes11,
+                                                                     ifelse(x %in% name_dimension[["depth"]],
+                                                                            length(depth),
+                                                                            infos_dimi1 %>%
+                                                                              dplyr::filter(dim == x) %>%
+                                                                              pull(n_values)))
+                                                            }), infos_dimi1$dim)),
+                                          verbose = FALSE))
+
+                if (all(class(data.var_ref) == "try-error")) {
+                  # cat("Trying to remove depth. If Time should be removed instead of depth, please adapt the function script.\n")
+                  data.var <- try(ncvar_get(nc.data1, pred,
+                                            start = order_dim(infos_dimi1,
+                                                              dimensions = set_names(map(infos_dimi1$dim, function(x) {
+                                                                ifelse(x %in% name_dimension[["time"]],
+                                                                       time11,
+                                                                       1)
+                                                              }), infos_dimi1$dim),
+                                                              use_1value = F),
+
+                                            count = order_dim(infos_dimi1,
+                                                              dimensions = set_names(map(infos_dimi1$dim, function(x) {
+                                                                ifelse(x %in% name_dimension[["time"]],
+                                                                       numtimes11,
+                                                                       ifelse(x %in% name_dimension[["depth"]],
+                                                                              length(depth),
+                                                                              infos_dimi1 %>%
+                                                                                dplyr::filter(dim == x) %>%
+                                                                                pull(n_values)))
+                                                              }), infos_dimi1$dim),
+                                                              use_1value = F),
+                                            verbose = FALSE))
+                }
+                #####
+
+                dimtime <- infos_dim %>%
+                  dplyr::filter(variable == pred & nc.name == ncfile & n_values > 1)
+
+                if (any(dimtime$dim == name_dimension[["time"]])) {
+                  dimtime <- dimtime %>%
+                    dplyr::mutate(id = 1:n()) %>%
+                    dplyr::filter(dim == name_dimension[["time"]]) %>%
+                    pull(id)
+                } else {
+                  dimtime <- length(dim(data.var_ref)) + 1
                 }
 
                 data.var_ref <- abind::abind(data.var1,
-                                             data.var_ref, along = infos_dim %>%
-                                               dplyr::filter(variable == pred &
-                                                               nc.name == ncfile & n_values >
-                                                               1) %>% dplyr::mutate(id = 1:n()) %>%
-                                               dplyr::filter(dim == "time") %>%
-                                               pull(id))
+                                             data.var_ref,
+                                             along = dimtime)
                 nc_close(nc.data1)
               }
-              out <- cbind(data.var_ref) %>% as.data.frame() %>%
-                cbind(create_dim(infos_dim %>% dplyr::filter(variable ==
-                                                               pred & nc.name == ncfile), lon = lon,
-                                 lat = lat, depth = depth, time = 1:max(all_time.period)) %>%
-                        as.data.frame()) %>% dplyr::rename(`:=`(!!paste0(pred),
-                                                                data.var_ref))
-              return(out %>%
-                       dplyr::filter(lon >= (min(llon) - dlon / 2) & lon <= (max(llon) + dlon / 2) &
-                                       lat >= (min(llat) - dlat / 2) & lat <= (max(llat) + dlat / 2)))
+
+              infos_dim2 <- infos_dim
+
+              if (length(time_var) == 0) {
+                infos_dim2 <- infos_dim2 %>%
+                  group_by(nc.name, variable, file_set, date_start, date_end, period) %>%
+                  dplyr::reframe(dim = c(dim, "time"),
+                                 n_values = c(n_values, 1)) %>%
+                  ungroup
+              }
+
+              dimensions <- create_dim(infos_dim2 %>%
+                                         dplyr::filter(variable == pred & nc.name == ncfile),
+
+                                       dimensions = set_names(map(infos_dim2$dim, function(x) {
+                                         if (x == name_dimension[["time"]]) {
+                                           1:max(all_time.period)
+                                         } else if (x == name_dimension[["depth"]]) {
+                                           depth
+                                         } else if (x == name_dimension[["lat"]]) {
+                                           lat
+                                         } else if (x == name_dimension[["lon"]]) {
+                                           lon
+                                         }
+                                       }), infos_dim2$dim)) %>%
+                as.data.frame()
+
+              if (pred %in% vertical_variables) {
+                out <- cbind(data.var_ref) %>% as.data.frame() %>%
+                  cbind(dimensions) %>%
+                  dplyr::filter(lon >= (min(llon) - dlon / 2) & lon <= (max(llon) + dlon / 2) &
+                                  lat >= (min(llat) - dlat / 2) & lat <= (max(llat) + dlat / 2)) %>%
+                  dplyr::arrange(d) %>%
+                  dplyr::group_by(lon, lat, t) %>%
+                  dplyr::summarise(va_data_var_ref = mean(data.var_ref, na.rm = TRUE),
+                            bot_data_var_ref = dplyr::last(na.omit(data.var_ref)),
+                            data_var_ref = dplyr::first(na.omit(data.var_ref)),
+                            d = 1,
+                            .groups = "drop") %>%
+                  dplyr::mutate(d_data_var_ref = data_var_ref - bot_data_var_ref) %>%
+                  dplyr::rename_with(.fn = ~ c(pred,
+                                        paste0("VertAv_", pred),
+                                        paste0("Bottom_", pred),
+                                        paste0("VertDiff_", pred),
+                                        "d"),
+                              .cols = c("data_var_ref", "va_data_var_ref", "bot_data_var_ref", "d_data_var_ref", "d"))
+              } else {
+                out <- cbind(data.var_ref) %>% as.data.frame() %>%
+                  cbind(dimensions) %>%
+                  dplyr::filter(lon >= (min(llon) - dlon / 2) & lon <= (max(llon) + dlon / 2) &
+                                  lat >= (min(llat) - dlat / 2) & lat <= (max(llat) + dlat / 2)) %>%
+                  dplyr::group_by(lon, lat, t) %>%
+                  dplyr::summarise(data.var_ref = dplyr::first(na.omit(data.var_ref)),
+                                   d = 1) %>%
+                  dplyr::ungroup() %>%
+                  dplyr::rename(`:=`(!!paste0(pred), data.var_ref))
+              }
+
+              return(out)
             })
             nc_close(nc.data)
             data.var_ref <- data.var_refi[[1]]
@@ -613,11 +831,19 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius, reso
             if (!(all(unique(paste(floor(data$lat_cent*10^5)/10^5,
                                    floor(data$lon_cent*10^5)/10^5)) %in% unique(paste(floor(data.var_ref$lat*10^5)/10^5,
                                                                                       floor(data.var_ref$lon*10^5)/10^5))) |
-                  all(unique(paste(floor(data.var_ref$lat_cent*10^5)/10^5,
-                                   floor(data.var_ref$lon_cent*10^5)/10^5)) %in% unique(paste(floor(data$lat*10^5)/10^5,
-                                                                                              floor(data$lon*10^5)/10^5))))) {
+                  all(unique(paste(floor(data.var_ref$lat*10^5)/10^5,
+                                   floor(data.var_ref$lon*10^5)/10^5)) %in% unique(paste(floor(data$lat_cent*10^5)/10^5,
+                                                                                         floor(data$lon_cent*10^5)/10^5))))) {
               stop("lon or lat not in the data")
             }
+
+            Predictor.name <- c(Predictor.name, na.omit(do.call("c", lapply(vertical_variables, function(c) {
+              if (c %in% Predictor.name) {
+                paste0(c("VertAv_", "Bottom_", "VertDiff_"), c)
+              } else {
+                NA
+              }
+            }))))
 
             data.var_ref <- data %>% dplyr::mutate(lon_cent = floor(lon_cent*10^5)/10^5, lat_cent = floor(lat_cent*10^5)/10^5) %>%
               left_join(data.var_ref %>% dplyr::mutate(lon_cent = floor(lon*10^5)/10^5, lat_cent = floor(lat*10^5)/10^5), by = c("lon_cent",
