@@ -241,7 +241,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
       print(summary(run_models$best_models[[i]]))
 
-      which_soap <- which(vapply(run_models[["best_models"]][[1]][["smooth"]], inherits, logical(1), what = "soap.film"))
+      which_soap <- which(vapply(run_models[["best_models"]][[i]][["smooth"]], inherits, logical(1), what = "soap.film"))
 
       if (length(which_soap) >= 1) {
         for (j in which_soap) {
