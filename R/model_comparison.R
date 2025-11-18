@@ -186,7 +186,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
     }
 
     calibdata <- calibdata %>%
-      dplyr::select(X, Y, year, all_of(c(variable, response, effort_column))) %>%
+      dplyr::select(X, Y, year, period, all_of(c(variable, response, effort_column))) %>%
       tidyr::drop_na()
 
     calibdata[, variable] <- apply(calibdata[, variable], 2, rescale2)
@@ -240,9 +240,14 @@ model_comparison <- function(run_models, # output from run_all_DSM
       cat(paste0("## Model ", i, "\n\n"))
 
       print(summary(run_models$best_models[[i]]))
-      if (str_detect(as.character(run_models$best_models[[i]]$formula)[3], fixed("bs = \"so\", xt = list(bnd = bnd)"))) {
-        (plot(run_models$best_models[[i]], select = 1))
-        print(gratia::draw(run_models$best_models4plotting[[i]], rug = F, select = -1))
+
+      which_soap <- which(vapply(run_models[["best_models"]][[1]][["smooth"]], inherits, logical(1), what = "soap.film"))
+
+      if (length(which_soap) >= 1) {
+        for (j in which_soap) {
+          (plot(run_models$best_models[[i]], select = j))
+        }
+        print(gratia::draw(run_models$best_models4plotting[[i]], rug = F, select = -which_soap))
       } else {
         print(gratia::draw(run_models$best_models4plotting[[i]], rug = F))
       }
@@ -373,7 +378,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
   }
 
   calibdata <- calibdata %>%
-    dplyr::select(X, Y, year, all_of(c(variable, response, effort_column))) %>%
+    dplyr::select(X, Y, year, period, all_of(c(variable, response, effort_column))) %>%
     tidyr::drop_na()
 
   if (!dir.exists(paste0(prediction_folder, "/", response))) {
