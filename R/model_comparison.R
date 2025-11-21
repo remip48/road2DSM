@@ -249,7 +249,14 @@ model_comparison <- function(run_models, # output from run_all_DSM
         }
         print(gratia::draw(run_models$best_models4plotting[[i]], rug = F, select = -which_soap))
       } else {
-        print(gratia::draw(run_models$best_models4plotting[[i]], rug = F))
+        if (grepl("t2\\(X, Y, year", paste(as.character(run_models[["best_models"]][[1]][["formula"]]), collapse = ""))) {
+          print(gratia::draw(run_models$best_models4plotting[[i]], rug = F, select = 1))
+          print(gratia::draw(run_models$best_models4plotting[[i]], rug = F, select = 2))
+          print(gratia::draw(run_models$best_models4plotting[[i]], rug = F, select = -c(1,2)))
+        } else{
+          print(gratia::draw(run_models$best_models4plotting[[i]], rug = F, select = 1))
+          print(gratia::draw(run_models$best_models4plotting[[i]], rug = F, select = -1))
+        }
       }
       mgcv::qq.gam(run_models$best_models4plotting[[i]], rep = 1000)
 
