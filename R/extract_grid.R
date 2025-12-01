@@ -101,11 +101,11 @@ extract_grid <- function(grid,
   list_date <- sort(unique(dates))
 
   if (is.null(n_cores)) {
-    n_cores <- detectCores() * 3 / 4
+    n_cores <- parallel::detectCores() * 3 / 4
     cat("Parallel processing with", n_cores, "cores will be used.\n")
   }
 
-  cl <- makeCluster(n_cores, outfile = outfile
+  cl <- parallel::makeCluster(n_cores, outfile = outfile
   )
   registerDoParallel(cl)
 
@@ -388,7 +388,7 @@ extract_grid <- function(grid,
     return(NULL)
   }
 
-  stopCluster(cl)
+  parallel::stopCluster(cl)
   gc()
 
   # return(NULL)
