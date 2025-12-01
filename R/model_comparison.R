@@ -7,10 +7,8 @@
 #' @param variable
 #' @param effort_column
 #' @param version_preds
-#' @param output_file
 #' @param log1p_trans
 #' @param grid_folder
-#' @param static_grid
 #' @param prediction_folder
 #' @param block_file
 #' @param data_file
@@ -31,6 +29,8 @@
 #' @param outfile
 #' @param save_posterior_distribution
 #' @param n_cores
+#' @param title
+#' @param authors_markdown
 #'
 #' @return
 #' @importFrom foreach %dopar%
@@ -68,6 +68,8 @@ model_comparison <- function(run_models, # output from run_all_DSM
                              subspecies = NA, # in case response contains several species. The groupsize estimate will then account for all the subspecies
                              filter_year_month_not_in = "0000-00", # year and month that should not be used for prediction
                              run_all = F,
+                             title = "Results from the density surface models",
+                             authors_markdown,
                              outfile = "log.txt",
                              save_posterior_distribution = F,
                              n_cores = NULL) {
@@ -217,7 +219,8 @@ model_comparison <- function(run_models, # output from run_all_DSM
   # Construct R Markdown text
   rmd_text <- c(
     "---",
-    paste0("title: \"", "Results from the density surface models", "\""),
+    paste0("title: \"", title, "\""),
+    paste0("author: \"", authors_markdown, "\""),
     paste0("date: '`r Sys.Date()`'"),
     "output: html_document",
     "---",
