@@ -69,7 +69,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
                              filter_year_month_not_in = "0000-00", # year and month that should not be used for prediction
                              run_all = F,
                              title = "Results from the density surface models",
-                             authors_markdown,
+                             authors_markdown = NULL,
                              outfile = "log.txt",
                              save_posterior_distribution = F,
                              n_cores = NULL) {
@@ -220,7 +220,9 @@ model_comparison <- function(run_models, # output from run_all_DSM
   rmd_text <- c(
     "---",
     paste0("title: \"", title, "\""),
-    paste0("author: \"", authors_markdown, "\""),
+    ifelse(all(!is.null(authors_markdown)),
+           paste0("author: \"", paste(authors_markdown, collapse = ", "), "\""),
+           ""),
     paste0("date: '`r Sys.Date()`'"),
     "output: html_document",
     "---",
