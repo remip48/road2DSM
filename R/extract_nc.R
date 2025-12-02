@@ -25,8 +25,8 @@
 #' @return
 #' @importFrom foreach %dopar%
 #' @importFrom foreach foreach
-#' @import data.table
 #' @importFrom data.table .SD .N :=
+#' @import data.table
 #'
 #' @export
 #'
