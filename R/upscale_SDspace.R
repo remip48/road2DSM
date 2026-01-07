@@ -9,6 +9,8 @@
 #' @param file_directory
 #' @param writing_directory
 #' @param variables variables to calculate SDspace. Let null if you want all variables with .center to be calculated.
+#' @param crs_meter
+#' @param SDspace_radius km or pixel, depending on the unit of values you put in all_pixel.radius (if SDspace is used)
 #'
 #' @return
 #' @importFrom foreach %dopar%
@@ -18,6 +20,7 @@
 #'
 #' @examples
 upscale_SDspace <- function (file_directory, writing_directory, all_pixel.radius, variables = NULL,
+                             crs_meter = 3035, SDspace_radius = "pixel",
                              n_cores = NULL, outfile = "log.txt")
 {
 
@@ -46,7 +49,9 @@ upscale_SDspace <- function (file_directory, writing_directory, all_pixel.radius
 
   try({
     all_run <- foreach(lf = list_files, .packages = c("stringr", "dplyr", "data.table", "collapse", "purrr"),
-                       .noexport = ls()[!(ls() %in% c("file_directory", "writing_directory", "all_pixel.radius", "variables"))]) %dopar%
+                       .noexport = ls()[!(ls() %in% c("file_directory",
+                                                      "crs_meter", "SDspace_radius",
+                                                      "writing_directory", "all_pixel.radius", "variables"))]) %dopar%
       {
         x <- str_split_1(lf, "_")
         file_to_save <- paste0(paste(x[-length(x)], collapse = "_"), "_SDspace_", last(x))
@@ -55,13 +60,13 @@ upscale_SDspace <- function (file_directory, writing_directory, all_pixel.radius
 
           data <- readRDS(file.path(file_directory, lf))
 
-          data.var_ref <- data %>%
+          data_var_ref <- data %>%
             dplyr::select(id, X, Y, lon_cent, lat_cent, all_of(colnames(.)[str_detect(colnames(.), "center") |
                                                                              (str_detect(colnames(.), "SDtime") & !(str_detect(colnames(.), "mean")
                                                                                                                     | str_detect(colnames(.), "SDspace")))])) %>%
             dplyr::mutate(id_nc = id)
 
-          centers <- colnames(data.var_ref)[str_detect(colnames(data.var_ref), "center")]
+          centers <- colnames(data_var_ref)[str_detect(colnames(data_var_ref), "center")]
 
           if (any(!is.null(variables))) {
             centers <- na.omit(do.call("c", lapply(centers, function(c) {
@@ -71,8 +76,8 @@ upscale_SDspace <- function (file_directory, writing_directory, all_pixel.radius
             })))
           }
 
-          listX <- unique(data.var_ref$X)
-          listY <- unique(data.var_ref$Y)
+          listX <- unique(data_var_ref$X)
+          listY <- unique(data_var_ref$Y)
 
           final <- lapply(all_pixel.radius, function(pixel.radius) {
             resY <- mean(sort(listX)[-1] - sort(listX)[-length(listX)],
@@ -80,24 +85,45 @@ upscale_SDspace <- function (file_directory, writing_directory, all_pixel.radius
             resX <- mean(sort(listY)[-1] - sort(listY)[-length(listY)],
                          na.rm = T) * (pixel.radius + 0.5)
 
-            outM <- map_dfr(unique(data.var_ref$X),
-                            function(l) {
-                              # print(l)
-                              data.var_refX <- data.var_ref[abs(l - data.var_ref$X) <= resX, ]
-                              return(data.var_ref[data.var_ref$X == l, ] %>%
-                                       group_by(id) %>%
-                                       group_map(~{
-                                         c(id = .y$id,
-                                           id_nc = paste(data.var_refX$id_nc[abs(.x$Y - data.var_refX$Y) <= resY],
-                                                         collapse = ","))
-                                       }) %>%
-                                       bind_rows())
-                            }) %>% group_by(id) %>%
+            if (SDspace_radius == "pixel") {
+              outM <- map_dfr(unique(data_var_ref$X),
+                              function(l) {
+                                # print(l)
+                                data.var_refX <- data_var_ref[abs(l - data_var_ref$X) <= resX, ]
+                                return(data_var_ref[data_var_ref$X == l, ] %>%
+                                         group_by(id) %>%
+                                         group_map(~{
+                                           c(id = .y$id,
+                                             id_nc = paste(data.var_refX$id_nc[abs(.x$Y - data.var_refX$Y) <= resY],
+                                                           collapse = ","))
+                                         }) %>%
+                                         bind_rows())
+                              })
+            } else if (SDspace_radius == "km") {
+              outM <- map_dfr(unique(data_var_ref$X),
+                              function(l) {
+                                # print(l)
+                                data.var_refX <- data_var_ref[abs(l - data_var_ref$X) <= pixel.radius, ]
+                                return(data_var_ref[data_var_ref$X == l, ] %>%
+                                         group_by(id) %>%
+                                         group_map(~{
+                                           c(id = .y$id,
+                                             id_nc = paste(data.var_refX$id_nc[sqrt((.x$Y - data.var_refX$Y)^2 +
+                                                                                      (.x$X - data.var_refX$X)^2) <= pixel.radius],
+                                                           collapse = ","))
+                                         }) %>%
+                                         bind_rows())
+                              })
+            } else {
+              stop("SDspace_radius is different from 'km' and 'pixel': please choose one of them even if SDspace is not calculated.")
+            }
+             %>% group_by(id) %>%
               dplyr::reframe(id_nc = str_split_1(id_nc, ",")) %>%
               dplyr::mutate(across(colnames(.), ~ as.numeric(.x))) %>%
-              left_join(data.var_ref %>%
+              left_join(data_var_ref %>%
                           dplyr::select(id_nc, all_of(centers)), by = "id_nc",
-                        relationship = "many-to-many")
+                        relationship = "many-to-many") %>%
+              distinct()
 
             setDT(outM)
 
@@ -109,7 +135,7 @@ upscale_SDspace <- function (file_directory, writing_directory, all_pixel.radius
             outM <- outM %>%
               as_tibble()
 
-            # outM <- data.var_ref %>%
+            # outM <- data_var_ref %>%
             #   left_join(outM, by = c("id")) %>%
             #   dplyr::select(-id_nc)
 
