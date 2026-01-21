@@ -19,8 +19,8 @@
 #' @param resolution
 #' @param name_dimension
 #' @param vertical_variables
+#' @param initial_name_dimensions
 #' @param max_depth
-#' @param rename_dimensions
 #'
 #' @return
 #' @importFrom foreach %dopar%
@@ -38,9 +38,28 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                         latmin = -Inf, lonmax = Inf, latmax = Inf, name_dimension = list(lon = "lon",
                                                                                          lat = "lat", time = NULL, depth = NULL), max_depth = Inf,
                         vertical_variables = NULL, Number_starting_name_file_set = 1,
-                        rename_dimensions = list(lon = NULL, lat = NULL, time = NULL, depth = NULL),
+                        initial_name_dimensions = list(lon = NULL, lat = NULL, time = NULL, depth = NULL),
                         n_cores = NULL, outfile = "log.txt")
 {
+
+  print(do.call("rbind", lapply(c("lon", "lat", "time", "depth"), function(c) {
+    # print(c)
+    out <- data.frame(Name_dimension = ifelse(is.null(initial_name_dimensions[[c]]), NA, initial_name_dimensions[[c]]),
+                      Renamed_as = ifelse(is.null(name_dimension[[c]]), NA, name_dimension[[c]])) %>%
+      dplyr::mutate(Name_dimension = ifelse(is.na(Name_dimension), Renamed_as, Name_dimension))
+
+    colnames(out)[1] <- "Name dimension in nc file ('initial_name_dimensions')"
+    colnames(out)[2] <- "         Rename of the dimension to extract its actual values ('name_dimension')"
+
+    return(out)
+  })))
+
+  if (all(is.null(vertical_variables))) {
+    cat("\nMaximum depth used:", max_depth, "\nVariables vertically extracted: none\n")
+  } else {
+    cat("\nMaximum depth used:", max_depth, "\nVariables vertically extracted:", paste(vertical_variables, collapse = ", "), "\n")
+  }
+
   if (any(is.na(dates))) {
     stop("There is NA in the 'dates' object")
   }
@@ -219,12 +238,17 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                          sep = "/"))$var
       out <- ncinfoi[i, ] %>% left_join(map_dfr(v, function(x) {
         map_dfr(x$dim, function(d) {
-          if (d$name == name_dimension[["depth"]] & max_depth <
-              Inf) {
-            return(data.frame(variable = x$name, dim = d$name,
-                              n_values = length(d$vals[d$vals <= max_depth])))
-          }
-          else {
+          if (!is.null(name_dimension[["depth"]])) {
+            if (d$name == name_dimension[["depth"]] & max_depth <
+                Inf) {
+              return(data.frame(variable = x$name, dim = d$name,
+                                n_values = length(d$vals[d$vals <= max_depth])))
+            }
+            else {
+              return(data.frame(variable = x$name, dim = d$name,
+                                n_values = length(d$vals)))
+            }
+          } else {
             return(data.frame(variable = x$name, dim = d$name,
                               n_values = length(d$vals)))
           }
@@ -234,9 +258,9 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
       return(out)
     })
 
-    for (i in 1:length(rename_dimensions)) {
-      if (!is.null(rename_dimensions[[i]])) {
-        infos_dim$dim[infos_dim$dim == rename_dimensions[[i]]] <- name_dimension[[names(rename_dimensions)[i]]]
+    for (i in 1:length(initial_name_dimensions)) {
+      if (!is.null(initial_name_dimensions[[i]])) {
+        infos_dim$dim[infos_dim$dim == initial_name_dimensions[[i]]] <- name_dimension[[names(initial_name_dimensions)[i]]]
       }
     }
 
@@ -611,15 +635,27 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
 
                                       dimensions_list <- set_names(map(infos_dim2$dim,
                                                                        function(x) {
-                                                                         if (x == new_name_dimension[["time"]]) {
+                                                                         # if (x == new_name_dimension[["time"]]) {
+                                                                         #   1:max(all_time.period)
+                                                                         # } else if (x == new_name_dimension[["depth"]]) {
+                                                                         #   depth
+                                                                         # }
+                                                                         # else if (x == new_name_dimension[["lat"]]) {
+                                                                         #   lat
+                                                                         # }
+                                                                         # else if (x == new_name_dimension[["lon"]]) {
+                                                                         #   lon
+                                                                         # }
+                                                                         if (identical(x, new_name_dimension[["time"]])) {
                                                                            1:max(all_time.period)
-                                                                         } else if (x == new_name_dimension[["depth"]]) {
+
+                                                                         } else if (identical(x, new_name_dimension[["depth"]])) {
                                                                            depth
-                                                                         }
-                                                                         else if (x == new_name_dimension[["lat"]]) {
+
+                                                                         } else if (identical(x, new_name_dimension[["lat"]])) {
                                                                            lat
-                                                                         }
-                                                                         else if (x == new_name_dimension[["lon"]]) {
+
+                                                                         } else if (identical(x, new_name_dimension[["lon"]])) {
                                                                            lon
                                                                          }
                                                                        }), infos_dim2$dim)
@@ -919,5 +955,4 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
   }
   invisible("Finished")
 }
-
 
