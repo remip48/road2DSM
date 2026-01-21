@@ -30,13 +30,15 @@ model_comparison(
   subspecies = NA,
   filter_year_month_not_in = "0000-00",
   run_all = F,
+  title = "Results from the density surface models",
+  authors_markdown = NULL,
   outfile = "log.txt",
   save_posterior_distribution = F,
   n_cores = NULL
 )
 }
 \arguments{
-\item{n_cores}{}
+\item{authors_markdown}{}
 }
 \description{
 Using varying statistics. Predictions are run and bias-corrected as well. Abundances are calculated, and CV estimated. Allowed by sub-areas as well.

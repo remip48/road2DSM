@@ -9,12 +9,16 @@ upscale_SDspace(
   writing_directory,
   all_pixel.radius,
   variables = NULL,
+  crs_meter = 3035,
+  SDspace_radius = "pixel",
   n_cores = NULL,
   outfile = "log.txt"
 )
 }
 \arguments{
 \item{variables}{variables to calculate SDspace. Let null if you want all variables with .center to be calculated.}
+
+\item{SDspace_radius}{km or pixel, depending on the unit of values you put in all_pixel.radius (if SDspace is used)}
 }
 \description{
 Can be used on files from extract_grid (prediction grids, that were possibly upscaled by upscale_grid or created by creategrid). Calculate SDspace only on columns that contain ".center", as returned by extract_nc. Return all columns from the initial grid.

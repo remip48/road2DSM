@@ -117,7 +117,8 @@ upscale_SDspace <- function (file_directory, writing_directory, all_pixel.radius
             } else {
               stop("SDspace_radius is different from 'km' and 'pixel': please choose one of them even if SDspace is not calculated.")
             }
-             %>% group_by(id) %>%
+            outM <- outM %>%
+              group_by(id) %>%
               dplyr::reframe(id_nc = str_split_1(id_nc, ",")) %>%
               dplyr::mutate(across(colnames(.), ~ as.numeric(.x))) %>%
               left_join(data_var_ref %>%
