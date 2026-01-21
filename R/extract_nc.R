@@ -21,7 +21,6 @@
 #' @param vertical_variables
 #' @param initial_name_dimensions
 #' @param max_depth
-#' @param rename_dimensions
 #' @param crs_meter
 #' @param SDspace_radius km or pixel, depending on the unit of values you put in all_pixel.radius (if SDspace is used)
 #'
@@ -43,7 +42,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                         vertical_variables = NULL, Number_starting_name_file_set = 1,
                         initial_name_dimensions = list(lon = NULL, lat = NULL, time = NULL, depth = NULL),
                         crs_meter = 3035, SDspace_radius = "pixel",
-                        rename_dimensions = list(lon = NULL, lat = NULL, time = NULL, depth = NULL),
+                        # rename_dimensions = list(lon = NULL, lat = NULL, time = NULL, depth = NULL),
                         n_cores = NULL, outfile = "log.txt")
 {
 
