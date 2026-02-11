@@ -244,12 +244,30 @@ extract_grid <- function(grid,
         bb <- st_bbox(out)
 
         gridcc <- out %>%
+          st_cast() %>%
           st_coordinates(.) %>%
-          as.data.frame() %>%
+          as.data.frame()
+
+        gridcc <- gridcc %>%
+          dplyr::select(X, Y, all_of(last(colnames(.))))
+
+        colnames(gridcc)[colnames(gridcc) == dplyr::last(colnames(gridcc))] <- "L2"
+
+        gridcc <- gridcc %>%
           group_by(L2) %>%
-          dplyr::summarise(Xmin = min(X), Xmax = max(X),
-                           Ymin = min(Y), Ymax = max(Y)) %>%
+          dplyr::summarise(Xmin = min(X),
+                           Xmax = max(X),
+                           Ymin = min(Y),
+                           Ymax = max(Y)) %>%
           ungroup()
+
+        # gridcc <- out %>%
+        #   st_coordinates(.) %>%
+        #   as.data.frame() %>%
+        #   group_by(L2) %>%
+        #   dplyr::summarise(Xmin = min(X), Xmax = max(X),
+        #                    Ymin = min(Y), Ymax = max(Y)) %>%
+        #   ungroup()
 
         out <- out %>%
           dplyr::mutate(Xmin = gridcc$Xmin,
