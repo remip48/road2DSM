@@ -74,7 +74,7 @@ create_grid <- function(effort,
 
   cc <- grid5km %>%
     sf::st_drop_geometry() %>%
-    sf::st_as_sf(coords = c("X", "Y"), crs = sf::st_crs(grid)) %>%
+    sf::st_as_sf(coords = c("X", "Y"), crs = sf::st_crs(effort)) %>%
     sf::st_transform(crs = 4326) %>%
     dplyr::mutate(lon_cent = st_coordinates(.)[,1],
                   lat_cent = st_coordinates(.)[,2])
