@@ -28,7 +28,11 @@ create_grid <- function(effort,
   bb[1] <- bb[1] - resolution/2
   bb[2] <- bb[2] - resolution/2
 
-  cat("If bbox_grid = NULL, grid will automatically be extended from st_bbox(effort) ± resolution/2.\n")
+  cat("If bbox_grid = NULL, grid will automatically be extended from st_bbox(effort) ± resolution/2.\n\n")
+
+  cat("resolution MUST be in the same unit that effort CRS (modify effort CRS otherwise). CRS used:",
+      st_crs(effort)$input,
+      "\n")
 
   if (all(!is.null(bbox_grid))) {
     if (length(bbox_grid) != 4) {
