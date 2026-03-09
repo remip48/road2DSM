@@ -188,7 +188,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
     }
 
     calibdata <- calibdata %>%
-      dplyr::select(X, Y, year, period_2, period_3, period_5, all_of(c(variable, response, effort_column))) %>%
+      dplyr::select(X, Y, year, all_of(c(variable, response, effort_column))) %>%
       tidyr::drop_na()
 
     calibdata[, variable] <- apply(calibdata[, variable], 2, rescale2)
@@ -390,7 +390,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
   }
 
   calibdata <- calibdata %>%
-    dplyr::select(X, Y, year, period_2, period_3, period_5, all_of(c(variable, response, effort_column))) %>%
+    dplyr::select(X, Y, year, all_of(c(variable, response, effort_column))) %>%
     tidyr::drop_na()
 
   if (!dir.exists(paste0(prediction_folder, "/", response))) {
