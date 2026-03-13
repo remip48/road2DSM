@@ -33,7 +33,7 @@
 #' @examples
 
 
-extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
+extract_nciii <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                         resolution = "day", all_time.period, dates, lonmin = -Inf,
                         latmin = -Inf, lonmax = Inf, latmax = Inf, name_dimension = list(lon = "lon",
                                                                                          lat = "lat", time = NULL, depth = NULL), max_depth = Inf,
