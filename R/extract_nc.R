@@ -39,6 +39,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                         resolution = "day", all_time.period, dates, lonmin = -Inf,
                         latmin = -Inf, lonmax = Inf, latmax = Inf, name_dimension = list(lon = "lon",
                                                                                          lat = "lat", time = NULL, depth = NULL), max_depth = Inf,
+                        # lonmin_grid = NULL, latmin_grid = NULL, lonmax_grid = NULL, latmax_grid = NULL,
                         vertical_variables = NULL, Number_starting_name_file_set = 1,
                         initial_name_dimensions = list(lon = NULL, lat = NULL, time = NULL,
                                                        depth = NULL), n_cores = NULL, outfile = "log.txt")
@@ -53,6 +54,19 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                   colnames(out)[2] <- "     name_dimension: Corresponding name to extract dimension values."
                                   return(out)
                                 })))
+
+  # if (is.null(lonmin_grid)) {
+  # lonmin_grid <- lonmin
+  # }
+  # if (is.null(latmin_grid)) {
+  # latmin_grid <- latmin
+  # }
+  # if (is.null(lonmax_grid)) {
+  # lonmax_grid <- lonmax
+  # }
+  # if (is.null(latmax_grid)) {
+  # latmax_grid <- latmax
+  # }
   if (all(is.null(vertical_variables))) {
     cat("\nMaximum depth used:", max_depth, "\nVariables vertically extracted: none\n")
   }
@@ -318,13 +332,13 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                                                                                                    1
                                                                                                                  }), unique(infos_dimi$dim)),
                                                                           use_1value = F), count = order_dim(infos_dimi,
-                                                                                                                                                                 dimensions = set_names(map(unique(infos_dimi$dim),
-                                                                                                                                                                                            function(x) {
-                                                                                                                                                                                              ifelse(x %in% c(name_dimension[["lat"]],
-                                                                                                                                                                                                              name_dimension[["lon"]]), infos_dimi %>%
-                                                                                                                                                                                                       dplyr::filter(dim == x) %>% pull(n_values),
-                                                                                                                                                                                                     1)
-                                                                                                                                                                                            }), unique(infos_dimi$dim)), use_1value = F),
+                                                                                                             dimensions = set_names(map(unique(infos_dimi$dim),
+                                                                                                                                        function(x) {
+                                                                                                                                          ifelse(x %in% c(name_dimension[["lat"]],
+                                                                                                                                                          name_dimension[["lon"]]), infos_dimi %>%
+                                                                                                                                                   dplyr::filter(dim == x) %>% pull(n_values),
+                                                                                                                                                 1)
+                                                                                                                                        }), unique(infos_dimi$dim)), use_1value = F),
                                                         verbose = FALSE)
 
                                   if (all(class(data.var) == "try-error")) {
@@ -335,13 +349,13 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                                                                                                      1
                                                                                                                    }), unique(infos_dimi$dim)),
                                                                             use_1value = F, include_depth = F), count = order_dim(infos_dimi,
-                                                                                                               dimensions = set_names(map(unique(infos_dimi$dim),
-                                                                                                                                          function(x) {
-                                                                                                                                            ifelse(x %in% c(name_dimension[["lat"]],
-                                                                                                                                                            name_dimension[["lon"]]), infos_dimi %>%
-                                                                                                                                                     dplyr::filter(dim == x) %>% pull(n_values),
-                                                                                                                                                   1)
-                                                                                                                                          }), unique(infos_dimi$dim)), use_1value = F, include_depth = F),
+                                                                                                                                  dimensions = set_names(map(unique(infos_dimi$dim),
+                                                                                                                                                             function(x) {
+                                                                                                                                                               ifelse(x %in% c(name_dimension[["lat"]],
+                                                                                                                                                                               name_dimension[["lon"]]), infos_dimi %>%
+                                                                                                                                                                        dplyr::filter(dim == x) %>% pull(n_values),
+                                                                                                                                                                      1)
+                                                                                                                                                             }), unique(infos_dimi$dim)), use_1value = F, include_depth = F),
                                                           verbose = FALSE)
                                   }
                                 }
@@ -368,9 +382,14 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                                                            lat))]) %>% ungroup() %>% dplyr::mutate(lon_cent = loni,
                                                                                                                    lat_cent = lati) %>% dplyr::select(-c(layer,
                                                                                                                                                          loni, lati))
-                                data <- data %>% dplyr::filter(lon_cent >= lonmin,
-                                                               lon_cent <= lonmax, lat_cent >= latmin, lat_cent <=
-                                                                 latmax)
+                                res_lat <- median(sort(lat)[-1] - sort(lat)[-length(lat)],
+                                                  na.rm = T) * (max(all_pixel.radius) + 0.5)
+                                res_lon <- median(sort(lon)[-1] - sort(lon)[-length(lon)],
+                                                  na.rm = T) * (max(all_pixel.radius) + 0.5)
+
+                                data <- data %>% dplyr::filter(lon_cent >= (lonmin - res_lon),
+                                                               lon_cent <= (lonmax + res_lon), lat_cent >= (latmin - res_lat), lat_cent <=
+                                                                 (latmax + res_lat))
                                 return(data)
                               })
       data <- data %>% dplyr::filter(!duplicated(paste(lon_cent,
@@ -389,15 +408,48 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
       new_grid <- new_grid %>% arrange(id)
       write_sf(new_grid, paste0(nc.path, "/", f, ".shp"),
                append = F)
+      rm(nc.data)
       cat("Grid from the NC file_set saved under", paste0(nc.path,
                                                           "/", f, ".shp"), "\n")
     }
     else {
       new_grid <- read_sf(paste0(nc.path, "/", f, ".shp"))
 
-      new_grid <- new_grid %>% dplyr::filter(lon_cent >= lonmin,
-                                     lon_cent <= lonmax, lat_cent >= latmin, lat_cent <=
-                                       latmax)
+      datafile <- paste(nc.path, first(ncinfoi$nc.name[ncinfoi$file_set ==
+                                                         f]), sep = "/")
+      nc.data <- nc_open(datafile)
+      namedims <- names(nc.data$dim)
+      test <- try({
+        lat <- c(unique(as.vector(ncvar_get(nc.data,
+                                            namedims[namedims == name_dimension[["lat"]]]))))
+        lon <- c(unique(as.vector(ncvar_get(nc.data,
+                                            namedims[namedims == name_dimension[["lon"]]]))))
+      })
+      if (all(class(test) == "try-error")) {
+        namedims <- names(nc.data$var)
+        test <- try({
+          lat <- c(unique(as.vector(ncvar_get(nc.data,
+                                              namedims[namedims == name_dimension[["lat"]]]))))
+          lon <- c(unique(as.vector(ncvar_get(nc.data,
+                                              namedims[namedims == name_dimension[["lon"]]]))))
+        })
+      }
+      rm(nc.data)
+      rm(namedims)
+      res_lat <- median(sort(lat)[-1] - sort(lat)[-length(lat)],
+                        na.rm = T) * (max(all_pixel.radius) + 0.5)
+      res_lon <- median(sort(lon)[-1] - sort(lon)[-length(lon)],
+                        na.rm = T) * (max(all_pixel.radius) + 0.5)
+
+      new_grid <- new_grid %>% dplyr::filter(lon_cent >= (lonmin - res_lon),
+                                             lon_cent <= (lonmax + res_lon), lat_cent >= (latmin - res_lat), lat_cent <=
+                                               (latmax + res_lat))
+
+      rm(res_lon)
+      rm(res_lat)
+      rm(lon)
+      rm(lat)
+      rm(test)
     }
     data <- new_grid %>% st_drop_geometry() %>% dplyr::select(lon_cent,
                                                               lat_cent, id)
@@ -412,11 +464,11 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                              pull(date_start) %>% unique())
     origin_all <- strptime(origin_all, "%Y-%m-%d", tz = "GMT")
     all_days_period_ref <- data.frame(date = as.character(timeSequence(from = as.character(origin_all),
-                                                                       to = as.character(last(dates$dates)), by = "day"))) %>%
+                                                                       to = as.character(max(dates$dates)), by = "day"))) %>%
       group_by(date) %>% dplyr::mutate(period = if (any(ncinfoi$date_start <=
-                                                        date & ncinfoi$date_end >= date)) {
-        ncinfoi %>% dplyr::filter(date_start <= date & date_end >=
-                                    date) %>% pull(period) %>% unique()
+                                                        unique(date) & ncinfoi$date_end >= unique(date))) {
+        ncinfoi %>% dplyr::filter(date_start <= unique(date) & date_end >=
+                                    unique(date)) %>% pull(period) %>% unique()
       }
       else {
         NA
@@ -430,6 +482,8 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
     llat <- unique(data$lat_cent)
     dlon <- median(sort(llon)[-1] - sort(llon)[-length(llon)])
     dlat <- median(sort(llat)[-1] - sort(llat)[-length(llat)])
+    udatalon <- unique(data$lon_cent[data$lon_cent >= lonmin & data$lon_cent <= lonmax &
+                                       data$lat_cent >= latmin & data$lat_cent <= latmax])
     cat("Parallel processing with", n_cores, "cores will be used. Check that computed can handle it.\n\n",
         "In case of large files, few iterations might return an error due to memory limits. The function can then be re-run to re-do only these few iterations\n")
     cl <- makeCluster(n_cores, outfile = outfile)
@@ -439,7 +493,8 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                                            "rlang", "dplyr", "timeDate", "ncdf4", "stringr",
                                                            "data.table", "collapse"), .noexport = ls()[!(ls() %in%
                                                                                                            c("data", "llon", "llat", "dlon", "dlat", "max_depth",
-                                                                                                             "ncinfoi", "nc.path", "expr", "order_dim",
+                                                                                                             "ncinfoi", "nc.path", "expr", "order_dim", "udatalon",
+                                                                                                             # "latmax_grid", "lonmax_grid", "latmin_grid", "lonmin_grid",
                                                                                                              "create_dim", "origin_all", "all_days_period_ref",
                                                                                                              "infos_dim", "name_dimension", "f", "all_pixel.radius",
                                                                                                              "pixel.radius", "pred.type", "vertical_variables",
@@ -594,8 +649,8 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                         }
                                         SegDay1 <- length(as.character(timeSequence(from = unique(ncinfoi$date_start[ncinfoi$period ==
                                                                                                                        last_period & ncinfoi$variable ==
-                                                                                                                       pred]), to = last(all_days_period$date[all_days_period$period ==
-                                                                                                                                                                last_period]), by = "day")))
+                                                                                                                       pred]), to = max(all_days_period$date[all_days_period$period ==
+                                                                                                                                                               last_period]), by = "day")))
                                         day.index1 <- which((time11 + 1) ==
                                                               SegDay1)
                                         if (length(day.index1) == 0) {
@@ -830,16 +885,17 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
             if (!run_mean_SDspace) {
               all_pixel.radius <- 0
             }
+
             final <- lapply(all_pixel.radius, function(pixel.radius) {
               if (pixel.radius != all_pixel.radius[1] &
                   !run_mean_SDspace) {
                 return(NULL)
               }
-              res_lat <- mean(sort(lat)[-1] - sort(lat)[-length(lat)],
-                              na.rm = T) * (pixel.radius + 0.5)
-              res_lon <- mean(sort(lon)[-1] - sort(lon)[-length(lon)],
-                              na.rm = T) * (pixel.radius + 0.5)
-              outM <- map_dfr(unique(data$lon_cent),
+              res_lat <- median(sort(lat)[-1] - sort(lat)[-length(lat)],
+                                na.rm = T) * (pixel.radius + 0.5)
+              res_lon <- median(sort(lon)[-1] - sort(lon)[-length(lon)],
+                                na.rm = T) * (pixel.radius + 0.5)
+              outM <- map_dfr(udatalon,
                               function(l) {
                                 data.var_ref_t1l <- data.var_ref_t1[abs(l -
                                                                           data.var_ref_t1$lon) <= res_lon,
@@ -860,29 +916,76 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                            lat) + abs(lon_cent - lon)) %>% dplyr::select(id,
                                                                                          t, id_nc, dist, all_of(Predictor.name))
               if (run_mean_SDspace) {
-                outMsd <- as.data.table(outM)
-                rm(outM)
+                outM <- as.data.table(outM)
+                # rm(outM)
                 if (all(c("SDspace", "mean") %in% pred.type)) {
-                  outMsd <- outMsd[, c(list(id_nc = id_nc[which.min(dist)]),
-                                       setNames(fmean(.SD, na.rm = TRUE),
-                                                paste0(Predictor.name, ".mean")),
-                                       setNames(fsd(.SD, na.rm = TRUE),
-                                                paste0(Predictor.name, ".SDspace"))),
-                                   by = list(id, t), .SDcols = Predictor.name]
+                  outM <- outM[, c(list(id_nc = id_nc[which.min(dist)]),
+                                   setNames(fmean(.SD, na.rm = TRUE),
+                                            paste0(Predictor.name, ".mean")),
+                                   setNames(fsd(.SD, na.rm = TRUE),
+                                            paste0(Predictor.name, ".SDspace"))),
+                               by = list(id, t), .SDcols = Predictor.name]
                 }
                 else if ("mean" %in% pred.type) {
-                  outMsd <- outMsd[, c(list(id_nc = id_nc[which.min(dist)]),
-                                       setNames(fmean(.SD, na.rm = TRUE),
-                                                paste0(Predictor.name, ".mean"))),
-                                   by = list(id, t), .SDcols = Predictor.name]
+                  outM <- outM[, c(list(id_nc = id_nc[which.min(dist)]),
+                                   setNames(fmean(.SD, na.rm = TRUE),
+                                            paste0(Predictor.name, ".mean"))),
+                               by = list(id, t), .SDcols = Predictor.name]
                 }
                 else if ("SDspace" %in% pred.type) {
-                  outMsd <- outMsd[, c(list(id_nc = id_nc[which.min(dist)]),
-                                       setNames(fsd(.SD, na.rm = TRUE),
-                                                paste0(Predictor.name, ".SDspace"))),
-                                   by = .(id, t), .SDcols = Predictor.name]
+                  outM <- outM[, c(list(id_nc = id_nc[which.min(dist)]),
+                                   setNames(fsd(.SD, na.rm = TRUE),
+                                            paste0(Predictor.name, ".SDspace"))),
+                               by = .(id, t), .SDcols = Predictor.name]
+                  # allti <- unique(outM$t)
+                  #
+                  # # outM <- map_dfr(allti, function(ti) {
+                  # #   if (ti == allti[1]) {
+                  # #     outM[t == ti, c(list(id_nc = id_nc[which.min(dist)]),
+                  # #                     setNames(fsd(.SD, na.rm = TRUE),
+                  # #                              paste0(Predictor.name, ".SDspace"))),
+                  # #          by = id, .SDcols = Predictor.name]
+                  # #   } else {
+                  # #     outM[t == ti, c(setNames(fsd(.SD, na.rm = TRUE),
+                  # #                              paste0(Predictor.name, ".SDspace"))),
+                  # #          by = id, .SDcols = Predictor.name]
+                  # #   }
+                  # # })
+                  # new_names <- paste0(Predictor.name, ".SDspace")
+                  #
+                  # res_list <- vector("list", length(allti))
+                  #
+                  # for (i in seq_along(allti)) {
+                  #   ti <- allti[i]
+                  #
+                  #   tmp <- outM[
+                  #     t == ti,
+                  #     {
+                  #       fsd_vals <- setNames(fsd(.SD, na.rm = TRUE), new_names)
+                  #
+                  #       if (ti == allti[1]) {
+                  #         c(
+                  #           list(id_nc = id_nc[which.min(dist)]),
+                  #           fsd_vals
+                  #         )
+                  #       } else {
+                  #         fsd_vals
+                  #       }
+                  #     },
+                  #     by = id,
+                  #     .SDcols = Predictor.name
+                  #   ]
+                  #
+                  #   tmp[, t := ti]  # keep track of t if needed
+                  #   res_list[[i]] <- tmp
+                  # }
+                  #
+                  # # Efficient row bind
+                  # outM <- rbindlist(res_list)
+                  # rm(res_list)
+                  # rm(tmp)
                 }
-                outM <- outMsd %>% as_tibble()
+                outM <- outM %>% as_tibble()
                 colnames(outM)[str_detect(colnames(outM),
                                           fixed(".mean")) | str_detect(colnames(outM),
                                                                        fixed(".SDspace"))] <- paste0(colnames(outM)[str_detect(colnames(outM),
@@ -909,14 +1012,16 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                 }
                 else {
                   if (any(c("SDspace", "mean") %in%
-                          pred.type) & (any(c("center", "SDtime") %in%
+                          pred.type) & (all(c("center", "SDtime") %in%
                                             pred.type) & pixel.radius == all_pixel.radius[1])) {
                     res1 <- outM[t %in% (max(all_time.period) -
                                            time.period + 1):numtimes, c(setNames(lapply(.SD,
                                                                                         mean, na.rm = TRUE), paste0(cols1,
-                                                                                                                    ".mean")), setNames(lapply(.SD,
-                                                                                                                                               sd, na.rm = TRUE), paste0(cols1,
-                                                                                                                                                                         ".SDtime"))), by = id, .SDcols = cols1]
+                                                                                                                    ".mean"))
+                                                                        # , setNames(lapply(.SD,
+                                                                        #                                                                        sd, na.rm = TRUE), paste0(cols1,
+                                                                        #                                                                                                  ".SDtime"))
+                                           ), by = id, .SDcols = cols1]
                     res2 <- outM[t %in% (max(all_time.period) -
                                            time.period + 1):numtimes, c(setNames(lapply(.SD,
                                                                                         mean, na.rm = TRUE), paste0(cols2,
@@ -928,15 +1033,63 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                     rm(res2)
                   }
                   else if (any(c("SDspace", "mean") %in%
+                               pred.type) & (all(c("center") %in%
+                                                 pred.type) & pixel.radius == all_pixel.radius[1])) {
+                    res1 <- outM[t %in% (max(all_time.period) -
+                                           time.period + 1):numtimes, c(setNames(lapply(.SD,
+                                                                                        mean, na.rm = TRUE), paste0(cols1,
+                                                                                                                    ".mean"))
+                                                                        # , setNames(lapply(.SD,
+                                                                        #                                                                        sd, na.rm = TRUE), paste0(cols1,
+                                                                        #                                                                                                  ".SDtime"))
+                                           ), by = id, .SDcols = cols1]
+                    res2 <- outM[t %in% (max(all_time.period) -
+                                           time.period + 1):numtimes, c(setNames(lapply(.SD,
+                                                                                        mean, na.rm = TRUE), paste0(cols2,
+                                                                                                                    ".center"))
+                                                                        # , setNames(lapply(.SD,
+                                                                        #                                                                          sd, na.rm = TRUE), paste0(cols2,
+                                                                        #                                                                                                    ".SDtime"))
+                                           ), by = id, .SDcols = cols2]
+                    outf <- merge(res1, res2, by = "id")
+                    rm(res1)
+                    rm(res2)
+                  }
+                  else if (any(c("SDspace", "mean") %in%
+                               pred.type) & (all(c("SDtime") %in%
+                                                 pred.type) & pixel.radius == all_pixel.radius[1])) {
+                    res1 <- outM[t %in% (max(all_time.period) -
+                                           time.period + 1):numtimes, c(setNames(lapply(.SD,
+                                                                                        mean, na.rm = TRUE), paste0(cols1,
+                                                                                                                    ".mean"))
+                                                                        # , setNames(lapply(.SD,
+                                                                        #                                                                        sd, na.rm = TRUE), paste0(cols1,
+                                                                        #                                                                                                  ".SDtime"))
+                                           ), by = id, .SDcols = cols1]
+                    res2 <- outM[t %in% (max(all_time.period) -
+                                           time.period + 1):numtimes, c(setNames(lapply(.SD,
+                                                                                        mean, na.rm = TRUE), paste0(cols2,
+                                                                                                                    ".SDtime"))
+                                                                        # , setNames(lapply(.SD,
+                                                                        #                                                                          sd, na.rm = TRUE), paste0(cols2,
+                                                                        #                                                                                                    ".center"))
+                                           ), by = id, .SDcols = cols2]
+                    outf <- merge(res1, res2, by = "id")
+                    rm(res1)
+                    rm(res2)
+                  }
+                  else if (any(c("SDspace", "mean") %in%
                                pred.type)) {
                     outf <- outM[t %in% (max(all_time.period) -
                                            time.period + 1):numtimes, c(setNames(lapply(.SD,
                                                                                         mean, na.rm = TRUE), paste0(cols1,
-                                                                                                                    ".mean")), setNames(lapply(.SD,
-                                                                                                                                               sd, na.rm = TRUE), paste0(cols1,
-                                                                                                                                                                         ".SDtime"))), by = id, .SDcols = cols1]
+                                                                                                                    ".mean"))
+                                                                        # , setNames(lapply(.SD,
+                                                                        #                                                                        sd, na.rm = TRUE), paste0(cols1,
+                                                                        #                                                                                                  ".SDtime"))
+                                           ), by = id, .SDcols = cols1]
                   }
-                  else if (any(c("center", "SDtime") %in%
+                  else if (all(c("center", "SDtime") %in%
                                pred.type)) {
                     outf <- outM[t %in% (max(all_time.period) -
                                            time.period + 1):numtimes, c(setNames(lapply(.SD,
@@ -944,6 +1097,20 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                                                                                                     ".center")), setNames(lapply(.SD,
                                                                                                                                                  sd, na.rm = TRUE), paste0(cols2,
                                                                                                                                                                            ".SDtime"))), by = id, .SDcols = cols2]
+                  }
+                  else if (all(c("center") %in%
+                               pred.type)) {
+                    outf <- outM[t %in% (max(all_time.period) -
+                                           time.period + 1):numtimes, c(setNames(lapply(.SD,
+                                                                                        mean, na.rm = TRUE), paste0(cols2,
+                                                                                                                    ".center"))), by = id, .SDcols = cols2]
+                  }
+                  else if (all(c("SDtime") %in%
+                               pred.type)) {
+                    outf <- outM[t %in% (max(all_time.period) -
+                                           time.period + 1):numtimes, c(setNames(lapply(.SD,
+                                                                                        sd, na.rm = TRUE), paste0(cols2,
+                                                                                                                  ".SDtime"))), by = id, .SDcols = cols2]
                   }
                 }
                 outf <- outf %>% as_tibble()
