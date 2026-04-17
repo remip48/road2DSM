@@ -170,6 +170,51 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                                                        })
   stopCluster(cl)
   gc()
+
+  if (any(do.call("c", map(as.character(dates), function(d) {
+    any(do.call("c", map(unique(nc_filesi$variable), function(v) {
+      temp <- nc_filesi %>%
+        dplyr::filter(variable == v)
+      all(do.call("c", map(1:nrow(temp), function(i) {
+        (d < as.character(temp$date_start[i]) | d > as.character(temp$date_end[i]))
+      })))
+    })))
+  })))) {
+    stop("At least one date to extract is not included in the NC file's time range! The function will fail.")
+  }
+
+  if (any(do.call("c", map(as.character(lubridate::as_date(dates) -
+                                        ifelse(resolution == "day",
+                                               lubridate::days(max(all_time.period - 1)),
+                                               ifelse(resolution == "month",
+                                                      months(max(all_time.period - 1)),
+                                                      NA
+                                                      )
+                                               )
+                                        ), function(d) {
+    any(do.call("c", map(unique(nc_filesi$variable), function(v) {
+      temp <- nc_filesi %>%
+        dplyr::filter(variable == v)
+      all(do.call("c", map(1:nrow(temp), function(i) {
+        (d < as.character(temp$date_start[i]) | d > as.character(temp$date_end[i]))
+      })))
+    })))
+  })))) {
+    stop("At least one date value of (dates - max(all_time.period)) is not included in the NC file's time range! The function will fail.")
+  }
+
+  if (any(do.call("c", map(as.character(dates), function(d) {
+    any(do.call("c", map(unique(nc_filesi$variable), function(v) {
+      temp <- nc_filesi %>%
+        dplyr::filter(variable == v)
+      all(do.call("c", map(1:nrow(temp), function(i) {
+        (d < as.character(temp$date_start[i]) | d > as.character(temp$date_end[i]))
+      })))
+    })))
+  })))) {
+    stop("At least one date to extract is not included in the NC file's time range! The function will fail.")
+  }
+
   list_variable <- nc_filesi %>% dplyr::filter(variable %in%
                                                  list_variable) %>% dplyr::select(file, variable) %>%
     distinct() %>% arrange(file) %>% group_by(variable) %>%
@@ -776,7 +821,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                         }
                                       }
                                       if (pred %in% vertical_variables) {
-                                        out <- cbind(data.var_ref) %>% as.data.frame() %>%
+                                        out <- matrix(data.var_ref, ncol = 1) %>% as.data.frame() %>%
                                           cbind(dimensions) %>% dplyr::filter(lon >=
                                                                                 (min(llon) - dlon/2) & lon <= (max(llon) +
                                                                                                                  dlon/2) & lat >= (min(llat) - dlat/2) &
@@ -794,7 +839,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                                                                                                                                                                                                             "d_data_var_ref", "d"))
                                       }
                                       else {
-                                        out <- cbind(data.var_ref) %>% as.data.frame() %>%
+                                        out <- matrix(data.var_ref, ncol = 1) %>% as.data.frame() %>%
                                           cbind(dimensions) %>% dplyr::filter(lon >=
                                                                                 (min(llon) - dlon/2) & lon <= (max(llon) +
                                                                                                                  dlon/2) & lat >= (min(llat) - dlat/2) &
@@ -825,6 +870,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
             rm(data.var_refi)
             data.var_ref <- data.var_ref %>% as.data.frame()
             for (c in colnames(data.var_ref)) {
+              # print(c)
               data.var_ref[, c] <- c(data.var_ref[,
                                                   c])
             }
