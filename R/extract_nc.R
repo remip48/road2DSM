@@ -827,9 +827,9 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                                                                                                  dlon/2) & lat >= (min(llat) - dlat/2) &
                                                                                 lat <= (max(llat) + dlat/2)) %>%
                                           dplyr::arrange(d) %>% dplyr::group_by(lon,
-                                                                                lat, t) %>% dplyr::summarise(va_data_var_ref = mean(data.var_ref,
-                                                                                                                                    na.rm = TRUE), bot_data_var_ref = dplyr::last(na.omit(data.var_ref)),
-                                                                                                             data_var_ref = dplyr::first(na.omit(data.var_ref)),
+                                                                                lat, t) %>% dplyr::summarise(va_data_var_ref = mean(V1,
+                                                                                                                                    na.rm = TRUE), bot_data_var_ref = dplyr::last(na.omit(V1)),
+                                                                                                             data_var_ref = dplyr::first(na.omit(V1)),
                                                                                                              d = 1, .groups = "drop") %>% dplyr::mutate(d_data_var_ref = data_var_ref -
                                                                                                                                                           bot_data_var_ref) %>% dplyr::rename_with(.fn = ~c(pred,
                                                                                                                                                                                                             paste0("VertAv_", pred), paste0("Bottom_",
@@ -845,7 +845,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                                                                                                  dlon/2) & lat >= (min(llat) - dlat/2) &
                                                                                 lat <= (max(llat) + dlat/2)) %>%
                                           dplyr::group_by(lon, lat, t) %>%
-                                          dplyr::summarise(data.var_ref = dplyr::first(na.omit(data.var_ref)),
+                                          dplyr::summarise(data.var_ref = dplyr::first(na.omit(V1)),
                                                            d = 1) %>% dplyr::ungroup() %>%
                                           dplyr::rename(`:=`(!!paste0(pred),
                                                              data.var_ref))
