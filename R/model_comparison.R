@@ -80,6 +80,8 @@ model_comparison <- function(run_models, # output from run_all_DSM
     prediction_folder <- gsub("\\\\", "/", prediction_folder)
   }
 
+  model_grpsize <- (grepl("group", response)) # check if modelling groupsize
+
   output_file = paste0(version_preds, "_model_comparison") # without extension, will be the name of html file
 
   ## this function is adapted to the type of data of ITAW.
@@ -122,7 +124,8 @@ model_comparison <- function(run_models, # output from run_all_DSM
       st_transform(crs = 3035) %>%
       group_by() %>%
       dplyr::summarise(do_union = F) %>%
-      st_cast("MULTIPOLYGON")
+      st_cast("MULTIPOLYGON") %>%
+      st_make_valid()
   }
   # pkg::fun(rmarkdown)
   # pkg::fun(mgcv)
@@ -148,7 +151,10 @@ model_comparison <- function(run_models, # output from run_all_DSM
   ##############
   setup_chunk <- quote({
 
-    knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE
+    knitr::opts_chunk$set(
+      echo = FALSE,
+      warning = FALSE,
+      message = FALSE
     )
     # pkg::fun(mgcv)
     # pkg::fun(gratia)
@@ -203,6 +209,42 @@ model_comparison <- function(run_models, # output from run_all_DSM
                               paste(log1p_trans, collapse = ", "),
                               "No covariates")), "were log-transformed.")
   })
+
+
+  ### Groupsize Model
+  if (model_grpsize) {
+    seg_data_groupsize <- seg_data %>%
+      dplyr::select(all_of(c(paste0("n_", species_code), response)), X, Y)
+
+    colname1 <- paste0("groupsize_", species_code)
+    colname2 <- paste0("n_", species_code, "_m1")
+    n_col     <- paste0("n_", species_code)
+
+    seg_data_groupsize <- seg_data_groupsize %>%
+      dplyr::filter(.data[[response]] > 0) %>%
+      dplyr::mutate(!!colname1 := .data[[n_col]] / .data[[response]],
+                    !!colname2 := .data[[n_col]] - 1)
+
+    gam_formula <- as.formula(paste0(colname2, " ~ 1 + s(X, Y, bs = 'so', xt = list(bnd = soap_smooth$bnd)) + offset(I(log(",response,")))"))
+
+    model_groupsize <- try(mgcv::gam(gam_formula,
+                                     data = seg_data_groupsize,
+                                     method = "REML",
+                                     knots = soap_smooth$knots,
+                                     family = "nb"))
+
+    if (all(class(model_groupsize) == "try-error")) {
+      gam_formula <- as.formula(paste0(colname2, " ~ 1 + s(X, Y) + offset(I(log(",response,")))"))
+      soap_use <- F
+      model_groupsize <- try(mgcv::gam(gam_formula,
+                                       data = seg_data_groupsize,
+                                       method = "REML",
+                                       family = "nb"))
+    } else {
+      soap_use <- T
+    }
+  }
+
   ##############
   chunk_best_models <- quote({
     knitr::kable(run_models$all_fits_binded[1:length(run_models$best_models), ] %>%
@@ -216,6 +258,19 @@ model_comparison <- function(run_models, # output from run_all_DSM
                    as.data.frame())
   })
   ##############
+
+  chunk_grpsize_model <- quote({
+    if (model_grpsize) {
+      cat("#### Group size model - ", ifelse(soap_use,
+                                             "soap used",
+                                             paste0("soap not used due to few segments with sightings (",
+                                                    nrow(seg_data_groupsize), " segments; otherwise we should decrease the number of knots)\n")))
+
+      plot(model_groupsize)
+    }
+  })
+  ##############
+
   # Construct R Markdown text
   rmd_text <- c(
     "---",
@@ -235,6 +290,9 @@ model_comparison <- function(run_models, # output from run_all_DSM
     "```",
     "```{r best_models_i, echo=FALSE}",
     paste(deparse(chunk_best_models), collapse = "\n"),
+    "```",
+    "```{r grpsize_model, echo=FALSE, results='asis'}",
+    paste(deparse(chunk_grpsize_model), collapse = "\n"),
     "```"
   )
 
@@ -324,8 +382,8 @@ model_comparison <- function(run_models, # output from run_all_DSM
   static <- read_sf(paste0(grid_folder, "/", static_grid)) %>%
     st_transform(crs = 3035)
 
-  if (all(!is.null(study_area))) {
-    static <- st_intersection(static, study_area)
+  if (!is.null(study_area)) {
+    static <- st_filter(static, study_area, .predicate = st_intersects)
   }
 
   static <- static %>%
@@ -495,6 +553,43 @@ model_comparison <- function(run_models, # output from run_all_DSM
     }
   }
 
+
+  if (model_grpsize) {
+    gridi <- read_sf(paste0(WorkDir, "/04_prediction_grids/20260520_10km_grid.shp")) %>%
+      st_transform(crs = 3035) %>%
+      mutate(id = 1:n())
+
+    cc <- st_coordinates(st_centroid(gridi))
+
+    gridi <- gridi %>%
+      dplyr::mutate(X = cc[, 1],
+                    Y = cc[, 2])
+
+    grid <- gridi %>%
+      st_drop_geometry()
+
+    pred_gp <- predict(model_groupsize, grid %>%
+                         mutate(!!response := 1), type = "response")
+    groupsizes <- gridi %>%
+      mutate(groupsizes_pred = unname(as.numeric(pred_gp)) + 1,
+             groupsizes_pred = groupsizes_pred * ifelse(!is.na(corr_groupsize),
+                                                        corr_groupsize,
+                                                        1))
+
+    groupsizes_data <- groupsizes %>%
+      st_drop_geometry()
+  } else {
+    gridi <- read_sf(paste0(WorkDir, "/04_prediction_grids/20260520_10km_grid.shp")) %>%
+      st_transform(crs = 3035) %>%
+      mutate(id = 1:n())
+
+    groupsizes_data <- data.frame(
+      id = 1:nrow(gridi),
+      groupsizes_pred = rep(1, nrow(gridi))
+    )
+  }
+
+
   to_runmi <- NA
 
   ls <- list.files(paste0(prediction_folder, "/", response, "/model",
@@ -543,8 +638,8 @@ model_comparison <- function(run_models, # output from run_all_DSM
       blocks <- read_sf(block_file) %>%
         st_transform(crs = 3035)
 
-      if (all(!is.null(study_area))) {
-        blocks <- st_intersection(blocks, study_area)
+      if (!is.null(study_area)) {
+        blocks <- st_filter(blocks, study_area, .predicate = st_intersects)
       }
 
     } else {
@@ -569,7 +664,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
                                    # .combine = rbind,
                                    .packages = c("sf", "dplyr", "purrr", "stringr", "ggplot2", "png"),
                                    .noexport = ls()[!(ls() %in% c("to_runm_files", "group_sizes_all", "do_plot", "response", "WorkDir",
-                                                                  "version_preds", "prediction_folder"))]) %dopar% {
+                                                                  "version_preds", "prediction_folder", "groupsizes_data"))]) %dopar% {
 
                                                                     run <- map_dfr(to_runm_files, function(i) {
 
@@ -582,10 +677,14 @@ model_comparison <- function(run_models, # output from run_all_DSM
                                                                                             i, "/", f)) %>%
                                                                         # st_drop_geometry() %>%
                                                                         dplyr::select(id, X, Y, areakm2, n_pred, density_pred) %>%
-                                                                        dplyr::mutate(model = i)
+                                                                        dplyr::mutate(model = i) %>%
+                                                                        left_join(groupsizes_data %>%
+                                                                                    dplyr::select(id, groupsizes_pred),
+                                                                                  by = "id")
 
                                                                       return(out)
                                                                     })
+
 
                                                                     return(run %>%
                                                                              st_drop_geometry())
@@ -649,124 +748,34 @@ model_comparison <- function(run_models, # output from run_all_DSM
                               "_average_predictions.gpkg"))
     }
 
-    if (!is.null(data_file)) {
-      data <- read_sf(data_file)
-
-      if (all(!is.na(subspecies))) {
-
-        data <- data %>%
-          dplyr::mutate(species = ifelse(species %in% subspecies, sp, species))
-      }
-
-      if (sp != "ppho") {
-        data$podsize <- data$SIG_nmb
-      }
-
-      strats <- unique(data$AU)
-
-      if (str_detect(response, "group")) {
-        groupsizes <- T
-
-        group_sizes_all <- data %>%
-          st_drop_geometry() %>%
-          dplyr::filter(species == sp &
-                          !(subj %in% c("ll", "lx", "xl", "xx", "pp", "lp", "pl", "xp", "px","")) & sub_sig %in% c("m", "g")) %>%
-          dplyr::select(species, podsize) %>%
-          dplyr::mutate(podsize = podsize * ifelse(!is.na(corr_groupsize),
-                                                   corr_groupsize,
-                                                   1))
-
-        group_sizes <- data %>%
-          st_drop_geometry() %>%
-          dplyr::mutate(AU = AU,
-                        podsize = podsize * ifelse(!is.na(corr_groupsize),
-                                                   corr_groupsize,
-                                                   1)) %>%
-          dplyr::filter(species == sp &
-                          !(subj %in% c("ll", "lx", "xl", "xx", "pp", "lp", "pl", "xp", "px","")) & sub_sig %in% c("m", "g")) %>%
-          group_by(AU) %>%
-          dplyr::summarise(n_groups = n(),
-                           mean = mean(podsize, na.rm = T),
-                           median = median(podsize, na.rm = T),
-                           SD = sd(podsize, na.rm = T),
-                           max = max(podsize, na.rm = T))
-
-        group_sizes <- group_sizes %>%
-          as.data.frame()
-
-        if (any(!(strats %in% group_sizes$AU))) {
-          group_sizes <- rbind(group_sizes,
-                               map_dfr(strats[which(!(strats %in% group_sizes$AU))],
-                                       function(st) {
-                                         return(data.frame(AU = st,
-                                                           n_groups = 0,
-                                                           mean = 0,
-                                                           median = 0,
-                                                           SD = 0,
-                                                           max = 0))
-                                       }))
-        }
-      } else {
-        groupsizes <- F
-        # for_plotting_gp_size <- NA
-
-        group_sizes_all <- data.frame(mean = ifelse(!is.na(corr_groupsize),
-                                                    corr_groupsize,
-                                                    1), SD = ifelse(!is.na(corr_groupsize),
-                                                                    corr_groupsize,
-                                                                    1), max = ifelse(!is.na(corr_groupsize),
-                                                                                     corr_groupsize,
-                                                                                     1))
-        group_sizes <- data.frame(mean = ifelse(!is.na(corr_groupsize),
-                                                corr_groupsize,
-                                                1), SD = ifelse(!is.na(corr_groupsize),
-                                                                corr_groupsize,
-                                                                1), max = ifelse(!is.na(corr_groupsize),
-                                                                                 corr_groupsize,
-                                                                                 1)) %>%
-          group_by(mean, SD, max) %>%
-          dplyr::reframe(AU = strats)
-      }
-
-    } else {
-      groupsizes <- F
-      # for_plotting_gp_size <- NA
-
-      strats <- unique(blocksti$Name)
-
-      group_sizes_all <- data.frame(mean = ifelse(!is.na(corr_groupsize),
-                                                  corr_groupsize,
-                                                  1), SD = ifelse(!is.na(corr_groupsize),
-                                                                  corr_groupsize,
-                                                                  1), max = ifelse(!is.na(corr_groupsize),
-                                                                                   corr_groupsize,
-                                                                                   1))
-      group_sizes <- data.frame(mean = ifelse(!is.na(corr_groupsize),
-                                              corr_groupsize,
-                                              1), SD = ifelse(!is.na(corr_groupsize),
-                                                              corr_groupsize,
-                                                              1), max = ifelse(!is.na(corr_groupsize),
-                                                                               corr_groupsize,
-                                                                               1)) %>%
-        group_by(mean, SD, max) %>%
-        dplyr::reframe(AU = strats)
-    }
-
     final <- final %>%
-      dplyr::mutate(AU = block)
+      dplyr::mutate(AU = block) %>%
+      left_join(groupsizes_data %>%
+                  dplyr::select(id, groupsizes_pred),
+                by = "id")
+
   })
   ##############
   rplot_chunk <- quote({
+    if (model_grpsize) {
+      print(ggplot() +
+              geom_sf(data = groupsizes %>%
+                        # st_intersection(blockstii) %>%
+                        dplyr::filter(units::drop_units(st_area(.)) > 0), aes(fill = groupsizes_pred), color = NA) +
+              scale_fill_viridis_c(name = "Group size") +
+              labs(title = paste0("Group size predicted ~ s(X, Y",
+                                  ifelse(soap_use,
+                                         ", bs = 'soap')",
+                                         ")\n- to few sightings to use soap smooth,\nor we should decrease the number of knots in the soap"))))
+    }
+
     ggplot2::ggplot() +
       ggplot2::geom_sf(data = final %>%
                          dplyr::filter(areakm2 > 0) %>%
                          dplyr::filter(!is.na(Avg_density)) %>%
-                         left_join(group_sizes %>%
-                                     dplyr::select(AU, mean),
-                                   by = "AU") %>%
-                         mutate(Avg_density = Avg_density * mean), ggplot2::aes(fill = cut(Avg_density,
-                                                                                           breaks = breaks_plot,
-                                                                                           labels = labels_plot
+                         mutate(Avg_density = Avg_density * groupsizes_pred), ggplot2::aes(fill = cut(Avg_density,
+                                                                                                      breaks = breaks_plot,
+                                                                                                      labels = labels_plot
                          )), color = NA) +
       ggplot2::facet_wrap(~ model) +
       ggplot2::scale_fill_viridis_d(drop = F, name = "Average density\n(ind/km2)") +
@@ -814,28 +823,12 @@ model_comparison <- function(run_models, # output from run_all_DSM
                                                                        labels = c("1", "2 - 5", "6 - 10",
                                                                                   "11 - 20", "21 - 50", "> 50"))), size = 1) +
             ggplot2::scale_color_viridis_d(name = "Nb of sightings") +
-            ggplot2::labs(title = ifelse(is.null(data_file) & groupsizes, "Number of groups observed per platform",
+            ggplot2::labs(title = ifelse(is.null(data_file) & model_grpsize, "Number of groups observed",
                                          paste0("Number of sightings per segment",
                                                 ifelse(!is.na(corr_groupsize) & corr_groupsize != 1,
                                                        paste0("\nmultiplied by correction factor = ", corr_groupsize),
                                                        "")))))
     # }
-
-    if (groupsizes) {
-
-      gp_print <- group_sizes
-
-      if (!(all(group_sizes$AU == "Full_area"))) {
-        gp_print <- rbind(group_sizes_all %>%
-                            dplyr::mutate(AU = "All",
-                                          n_groups = sum(group_sizes$n_groups)))
-      }
-
-      gp_print <- gp_print %>%
-        dplyr::mutate(mean = round(mean, 2), SD = round(SD, 2))
-      colnames(gp_print) <- c("Block", "Number of groups", "Mean groupsize", "Median groupsize", "SD groupsize", "Maximum groupsize")
-      print(knitr::kable(gp_print, caption = "Groupsizes"))
-    }
   })
 
   rmd_text <- c(
@@ -918,12 +911,9 @@ model_comparison <- function(run_models, # output from run_all_DSM
         dplyr::filter(model == unique(model)[1]) %>%
         dplyr::mutate(area_no_BS = areakm2) %>%
         st_drop_geometry() %>%
-        left_join(group_sizes %>%
-                    dplyr::select(AU, mean),
-                  by = "AU") %>%
         group_by(id) %>%
-        dplyr::summarise(groupsize = sum(mean * areakm2) / unique(areakm2_precropped),
-                         groupsize_no_BS = sum(mean * area_no_BS) / unique(areakm2_precropped),
+        dplyr::summarise(groupsize = sum(groupsizes_pred * areakm2) / unique(areakm2_precropped),
+                         groupsize_no_BS = sum(groupsizes_pred * area_no_BS) / unique(areakm2_precropped),
                          ratio = groupsize_no_BS / groupsize,
                          areakm2_precropped = unique(areakm2_precropped)#,
         ) %>%
@@ -935,13 +925,10 @@ model_comparison <- function(run_models, # output from run_all_DSM
         dplyr::mutate(area_no_BS = areakm2) %>%
         st_drop_geometry() %>%
         arrange(model, id) %>%
-        left_join(group_sizes %>%
-                    dplyr::select(AU, mean),
-                  by = "AU") %>%
         group_by(model, id_cropped) %>%
         dplyr::summarise(id = id,
-                         groupsize = sum(mean * areakm2) / unique(areakm2_precropped),
-                         groupsize_no_BS = sum(mean * area_no_BS) / unique(areakm2_precropped),
+                         groupsize = sum(groupsizes_pred * areakm2) / unique(areakm2_precropped),
+                         groupsize_no_BS = sum(groupsizes_pred * area_no_BS) / unique(areakm2_precropped),
                          ratio = groupsize_no_BS / groupsize,
                          areakm2_precropped = unique(areakm2_precropped),
                          Avg_density = mean(Avg_density, na.rm = T)) %>%
@@ -1289,7 +1276,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
         if (use_threshold) {
           cat("Bias on total abundance estimate:", round(bias, 0), "inds.",
-              "\n<br>Threshold used:", round(q999, 4), ifelse(groupsizes,
+              "\n<br>Threshold used:", round(q999, 4), ifelse(model_grpsize,
                                                               "groups/km².",
                                                               "inds/km².\n"))
         } else {
@@ -1588,7 +1575,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
                              )), color = NA) +
           ggplot2::scale_fill_viridis_d(drop = F, name = "Density\n(ind/km2)", #\naveraged between days,\nmedian between simulation)"
           ) +
-          ggplot2::labs(title = ifelse(groupsizes,
+          ggplot2::labs(title = ifelse(model_grpsize,
                                        # paste0("Model ", i, ": predictions multiplied by\naverage groupsize per SCANS-IV block"),
                                        paste0("Model ", i, ": predictions"),
                                        paste0("Model ", i, ": predictions")))
@@ -1669,6 +1656,18 @@ model_comparison <- function(run_models, # output from run_all_DSM
     input = tmp_md,
     output_file = paste0(prediction_folder, "/", output_file, ".html"),
     quiet = F
+  )
+
+  tryCatch(
+    rmarkdown::render(
+      input = tmp_md,
+      output_file = file.path(prediction_folder, paste0(output_file, ".html")),
+      quiet = FALSE
+    ),
+    error = function(e) {
+      print(e)
+      traceback()
+    }
   )
 
   message("HTML report generated: ", paste0(prediction_folder, "/", output_file, ".html"))
