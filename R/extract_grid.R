@@ -35,6 +35,10 @@ extract_grid <- function(grid,
                          n_cores = NULL,
                          outfile = "log.txt") {
 
+  assertthat::assert_that("lon_cent" %in% colnames(grid))
+  assertthat::assert_that("lat_cent" %in% colnames(grid))
+  assertthat::assert_that("id" %in% colnames(grid))
+
   version_file <- "prediction"
   today <- version_file
 

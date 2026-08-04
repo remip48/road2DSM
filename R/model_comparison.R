@@ -321,7 +321,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
           print(gratia::draw(run_models$best_models4plotting[[i]], rug = F, select = -1))
         }
       }
-      mgcv::qq.gam(run_models$best_models4plotting[[i]], rep = 1000)
+      mgcv::qq.gam(run_models$best_models[[i]], rep = 1000)
 
       cat("\n\n")
       cat(paste0("#### ASPE & Ratio of the number of observed ", ifelse(str_detect(response, "group"), "groups", "individuals"),
