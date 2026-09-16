@@ -37,9 +37,6 @@ new_model_comparison(
   n_cores = 1
 )
 }
-\arguments{
-\item{authors_markdown}{}
-}
 \description{
 Using varying statistics. Predictions are run and bias-corrected as well. Abundances are calculated, and CV estimated. Allowed by sub-areas as well.
 }

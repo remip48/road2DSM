@@ -6,9 +6,6 @@
 \usage{
 upscale_grid(grid, resolution)
 }
-\arguments{
-\item{resolution}{}
-}
 \description{
 Can be used on the nc file grid created by extract_nc. Resolution must be in the same unit than the input grid, for which the crs will be used to create the new grid.
 }

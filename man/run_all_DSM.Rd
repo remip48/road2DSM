@@ -18,6 +18,7 @@ run_all_DSM(
   spline_to_add = NULL,
   soap = list(bnd = NULL, knots = NULL, coordinates = c("X", "Y"), by = NULL),
   max_correlation = 0.5,
+  weights = NULL,
   use_loo = FALSE,
   offset_effort = "effort_km2",
   method = "REML",
@@ -42,9 +43,6 @@ run_all_DSM(
   first_try_AIC = F,
   fit_models = T
 )
-}
-\arguments{
-\item{cc_covariate}{}
 }
 \description{
 with all combinations of covariates desired, and return AIC and LOO metrics if desired. Uses nb() family. Function should be modified otherwise.

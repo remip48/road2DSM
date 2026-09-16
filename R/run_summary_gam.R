@@ -15,21 +15,21 @@ run_summary_gam <- function(run_models,
       for (j in which_soap) {
         (plot(run_models$best_models4plotting[[i]], select = j))
       }
-      print(gratia::draw(run_models$best_models4plotting[[i]], rug = T, select = -which_soap))
+      try(print(gratia::draw(run_models$best_models4plotting[[i]], rug = T, select = -which_soap)))
     } else {
       if (grepl("t2\\(X,Y,", paste(stringr::str_remove_all(as.character(run_models[["best_models"]][[1]][["formula"]]),
                                                            " "),
                                    collapse = ""))) {
-        print(gratia::draw(run_models$best_models4plotting[[i]], rug = T, select = 1))
-        print(gratia::draw(run_models$best_models4plotting[[i]], rug = T, select = 2))
-        print(gratia::draw(run_models$best_models4plotting[[i]], rug = T, select = -c(1,2)))
+        try(print(gratia::draw(run_models$best_models4plotting[[i]], rug = T, select = 1)))
+        try(print(gratia::draw(run_models$best_models4plotting[[i]], rug = T, select = 2)))
+        try(print(gratia::draw(run_models$best_models4plotting[[i]], rug = T, select = -c(1,2))))
       } else if (grepl("X,Y", paste(stringr::str_remove_all(as.character(run_models[["best_models"]][[1]][["formula"]]),
                                                             " "),
                                     collapse = ""))) {
-        print(gratia::draw(run_models$best_models4plotting[[i]], rug = T, select = 1))
-        print(gratia::draw(run_models$best_models4plotting[[i]], rug = T, select = -1))
+        try(print(gratia::draw(run_models$best_models4plotting[[i]], rug = T, select = 1)))
+        try(print(gratia::draw(run_models$best_models4plotting[[i]], rug = T, select = -1)))
       } else {
-        print(gratia::draw(run_models$best_models4plotting[[i]], rug = T))
+        try(print(gratia::draw(run_models$best_models4plotting[[i]], rug = T)))
       }
     }
     mgcv::qq.gam(run_models$best_models[[i]], rep = 1000)

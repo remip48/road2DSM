@@ -11,9 +11,6 @@ crop_effort(
   study_area = NULL
 )
 }
-\arguments{
-\item{keep}{}
-}
 \description{
 The grid extracted from nc file is supposed to have been extracted with extract_nc
 }

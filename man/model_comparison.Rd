@@ -34,11 +34,9 @@ model_comparison(
   authors_markdown = NULL,
   outfile = "log.txt",
   save_posterior_distribution = F,
-  n_cores = 1
+  n_cores = 1,
+  save_plots = FALSE
 )
-}
-\arguments{
-\item{authors_markdown}{}
 }
 \description{
 Using varying statistics. Predictions are run and bias-corrected as well. Abundances are calculated, and CV estimated. Allowed by sub-areas as well.

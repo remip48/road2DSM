@@ -13,9 +13,6 @@ create_soap(
   n_try = 25
 )
 }
-\arguments{
-\item{max_buffer}{}
-}
 \description{
 create soap smooth object for DSM
 }

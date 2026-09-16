@@ -6,9 +6,6 @@
 \usage{
 create_grid(effort, resolution, bbox_grid = NULL, sea = NULL, country = NULL)
 }
-\arguments{
-\item{country}{}
-}
 \description{
 Use effort and addition input bbox to create a grid - that can be crop to the study area or the countries, as wished.
 Effort must be an sf object, and grid will be created in the same crs than it. "resolution" must therefore also be in the same unit than this crs.

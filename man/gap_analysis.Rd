@@ -20,9 +20,6 @@ gap_analysis(
   n_cores = NULL
 )
 }
-\arguments{
-\item{n_cores}{}
-}
 \description{
 for gap analysis in the environmental space.
 }

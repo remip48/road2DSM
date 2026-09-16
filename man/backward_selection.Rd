@@ -23,9 +23,6 @@ backward_selection(
   Pvalue_max = 0.05
 )
 }
-\arguments{
-\item{Pvalue_max}{}
-}
 \description{
 Title
 }

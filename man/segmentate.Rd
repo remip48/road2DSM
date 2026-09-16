@@ -20,9 +20,6 @@ segmentate(
   plot = T
 )
 }
-\arguments{
-\item{plot}{}
-}
 \description{
 from line-transect surveys.
 }

@@ -21,9 +21,6 @@ extract_grid(
   outfile = "log.txt"
 )
 }
-\arguments{
-\item{outfile}{}
-}
 \description{
 Based on grids extracted from nc files using extract_nc. You can also use this function to extract covariates from grids created by SDspace_on_sf by reproducing the output structure of extract_nc: the sf grids must be called as "file_set_X.shp" (where X is a number) in file_set_directory. The daily .rds grids with actual covariates to extract must be saved under folder called "file_set_X" where X is matching with the corresponding sf grid.
 }

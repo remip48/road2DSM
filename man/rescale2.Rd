@@ -6,9 +6,6 @@
 \usage{
 rescale2(ynew, y = NULL)
 }
-\arguments{
-\item{y}{}
-}
 \description{
 Title
 }

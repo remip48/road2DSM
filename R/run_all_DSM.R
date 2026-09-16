@@ -34,6 +34,7 @@
 #' @param smoother
 #' @param fit_models
 #' @param cc_covariate
+#' @param weights
 #'
 #' @return
 #' @importFrom foreach %dopar%
@@ -61,6 +62,7 @@ run_all_DSM <- function (segdata_obs,
                          spline_to_add = NULL, # any spline to add to the model. It will be added as such in the model and values wont be scaled.
                          soap = list(bnd = NULL, knots = NULL, coordinates = c("X", "Y"), by = NULL),
                          max_correlation = 0.5,
+                         weights = NULL, # weights as for gam model
                          use_loo = FALSE, # if model selection is used based on LOO (TRUE) or on AIC (FALSE)
                          # random = NULL, # random effect to add.
                          # by_complexity = NULL, # if by_te, is the complexity of spline_by
@@ -884,8 +886,12 @@ run_all_DSM <- function (segdata_obs,
                 length(all_mods)
   )
 
+  if (all(is.null(weights))) {
+    weights <- rep(1, nrow(segdata_obs))
+  }
+
   my_dsm_fct <- function(x, tab = TRUE, segdata_obs, loo = FALSE, method,
-                         bnd = soap$bnd, knots = soap$knots, verbose = F) {
+                         bnd = soap$bnd, knots = soap$knots, verbose = F, weights) {
     if (verbose) {
       glue("\t\t* Fitting model with formula {x}\n")
     }
@@ -893,6 +899,7 @@ run_all_DSM <- function (segdata_obs,
       model <- mgcv::gam(as.formula(all_mods[x]),
                          data = segdata_obs,
                          method = method,
+                         weights = weights,
                          select = use_select,
                          drop.unused.levels = F,
                          knots = knots,
@@ -901,6 +908,7 @@ run_all_DSM <- function (segdata_obs,
       model <- mgcv::gam(as.formula(all_mods[x]),
                          data = segdata_obs,
                          method = method,
+                         weights = weights,
                          select = use_select,
                          drop.unused.levels = F,
                          family = "nb")
@@ -970,7 +978,7 @@ run_all_DSM <- function (segdata_obs,
     if (first_try != F | first_try_AIC != F) {
       BAM_try <- foreach(x = 1:length(all_mods),
                          .combine = rbind,
-                         .noexport = ls()[!(ls() %in% c("segdata_obs", "all_mods", "knots", "bnd", "method"))], # my_dsm_fct
+                         .noexport = ls()[!(ls() %in% c("weights", "segdata_obs", "all_mods", "knots", "bnd", "method"))], # my_dsm_fct
                          .packages = c("qpcR", "mgcv", "dplyr")
       ) %dopar% {
         # out <- my_dsm_fct(x, segdata_obs = segdata_obs, all_mods = all_mods)
@@ -981,6 +989,7 @@ run_all_DSM <- function (segdata_obs,
           model <- mgcv::bam(as.formula(all_mods[x]),
                              data = segdata_obs,
                              method = method,
+                             weights = weights,
                              # drop.unused.levels = F,
                              knots = knots,
                              discrete = T,
@@ -988,6 +997,7 @@ run_all_DSM <- function (segdata_obs,
         } else {
           model <- mgcv::bam(as.formula(all_mods[x]),
                              data = segdata_obs,
+                             weights = weights,
                              method = method,
                              # drop.unused.levels = F,
                              discrete = T,
@@ -1103,7 +1113,7 @@ run_all_DSM <- function (segdata_obs,
 
     if (fit_all_once) {
       all_models_fitted <- foreach(x = 1:length(all_mods),
-                                   .noexport = ls()[!(ls() %in% c("segdata_obs", "all_mods", "knots", "bnd", "method", "BAM_try",
+                                   .noexport = ls()[!(ls() %in% c("weights", "segdata_obs", "all_mods", "knots", "bnd", "method", "BAM_try",
                                                                   "use_select"))], # my_dsm_fct
                                    .packages = c("qpcR", "mgcv", "dplyr")
       ) %dopar% {
@@ -1115,6 +1125,7 @@ run_all_DSM <- function (segdata_obs,
             model <- mgcv::gam(as.formula(all_mods[x]),
                                data = segdata_obs,
                                method = method,
+                               weights = weights,
                                select = use_select,
                                # drop.unused.levels = F,
                                knots = knots,
@@ -1122,6 +1133,7 @@ run_all_DSM <- function (segdata_obs,
           } else {
             model <- mgcv::gam(as.formula(all_mods[x]),
                                data = segdata_obs,
+                               weights = weights,
                                method = method,
                                select = use_select,
                                # drop.unused.levels = F,
@@ -1168,7 +1180,7 @@ run_all_DSM <- function (segdata_obs,
       gc()
     } else {
       all_fits <- foreach(x = 1:length(all_mods),
-                          .noexport = ls()[!(ls() %in% c("segdata_obs", "all_mods", "knots", "bnd", "method", "BAM_try",
+                          .noexport = ls()[!(ls() %in% c("weights", "segdata_obs", "all_mods", "knots", "bnd", "method", "BAM_try",
                                                          "use_select"))], # my_dsm_fct
                           .packages = c("qpcR", "mgcv", "dplyr")
       ) %dopar% {
@@ -1179,6 +1191,7 @@ run_all_DSM <- function (segdata_obs,
             bnd <- bnd
             model <- mgcv::gam(as.formula(all_mods[x]),
                                data = segdata_obs,
+                               weights = weights,
                                method = method,
                                select = use_select,
                                # drop.unused.levels = F,
@@ -1187,6 +1200,7 @@ run_all_DSM <- function (segdata_obs,
           } else {
             model <- mgcv::gam(as.formula(all_mods[x]),
                                data = segdata_obs,
+                               weights = weights,
                                method = method,
                                select = use_select,
                                # drop.unused.levels = F,
@@ -1341,7 +1355,7 @@ run_all_DSM <- function (segdata_obs,
       gc()
     } else {
       all_psis <- foreach(x = 1:length(all_mods),
-                          .noexport = ls()[!(ls() %in% c("segdata_obs", "all_mods", "tab", "knots", "bnd", "w", "method", "response", "offset_effort",
+                          .noexport = ls()[!(ls() %in% c("weights", "segdata_obs", "all_mods", "tab", "knots", "bnd", "w", "method", "response", "offset_effort",
                                                          "data_valid_loo",
                                                          "likelihood", "use_select"))], # my_dsm_fct
                           .packages = c("qpcR", "mgcv", "mvtnorm", "loo", "dplyr")
@@ -1353,6 +1367,7 @@ run_all_DSM <- function (segdata_obs,
           model <- mgcv::gam(as.formula(all_mods[x]),
                              data = segdata_obs,
                              method = method,
+                             weights = weights,
                              select = use_select,
                              # drop.unused.levels = F,
                              knots = knots,
@@ -1361,6 +1376,7 @@ run_all_DSM <- function (segdata_obs,
           model <- mgcv::gam(as.formula(all_mods[x]),
                              data = segdata_obs,
                              method = method,
+                             weights = weights,
                              select = use_select,
                              # drop.unused.levels = F,
                              family = "nb")
@@ -1453,7 +1469,7 @@ run_all_DSM <- function (segdata_obs,
       doParallel::registerDoParallel(clust)
 
       best <- foreach(x = index_order_sw,
-                      .noexport = ls()[!(ls() %in% c("X", "all_mods", "knots", "bnd", "index_order_sw", "method",
+                      .noexport = ls()[!(ls() %in% c("weights", "X", "all_mods", "knots", "bnd", "index_order_sw", "method",
                                                      "use_select"))], # my_dsm_fct
                       .packages = c("qpcR", "mgcv", "dplyr")
       ) %dopar% {
@@ -1465,6 +1481,7 @@ run_all_DSM <- function (segdata_obs,
           model <- mgcv::gam(as.formula(all_mods[x]),
                              data = X,
                              method = method,
+                             weights = weights,
                              select = use_select,
                              # drop.unused.levels = F,
                              knots = knots,
@@ -1472,6 +1489,7 @@ run_all_DSM <- function (segdata_obs,
         } else {
           model <- mgcv::gam(as.formula(all_mods[x]),
                              data = X,
+                             weights = weights,
                              method = method,
                              select = use_select,
                              # drop.unused.levels = F,
@@ -1548,7 +1566,7 @@ run_all_DSM <- function (segdata_obs,
     if (fit_all_once) {
       if (fit_with_actual_data) {
         best <- foreach(x = index_order_sw,
-                        .noexport = ls()[!(ls() %in% c("X", "all_mods", "knots", "bnd", "index_order_sw", "method",
+                        .noexport = ls()[!(ls() %in% c("weights", "X", "all_mods", "knots", "bnd", "index_order_sw", "method",
                                                        "use_select"))], # my_dsm_fct
                         .packages = c("qpcR", "mgcv", "dplyr")
         ) %dopar% {
@@ -1560,6 +1578,7 @@ run_all_DSM <- function (segdata_obs,
             model <- mgcv::gam(as.formula(all_mods[x]),
                                data = X,
                                method = method,
+                               weights = weights,
                                select = use_select,
                                # drop.unused.levels = F,
                                knots = knots,
@@ -1567,6 +1586,7 @@ run_all_DSM <- function (segdata_obs,
           } else {
             model <- mgcv::gam(as.formula(all_mods[x]),
                                data = X,
+                               weights = weights,
                                method = method,
                                select = use_select,
                                # drop.unused.levels = F,
@@ -1624,7 +1644,7 @@ run_all_DSM <- function (segdata_obs,
       })
     } else {
       best <- foreach(x = index_order_sw,
-                      .noexport = ls()[!(ls() %in% c("X", "all_mods", "knots", "bnd", "index_order_sw", "method",
+                      .noexport = ls()[!(ls() %in% c("weights", "X", "all_mods", "knots", "bnd", "index_order_sw", "method",
                                                      "use_select"))], # my_dsm_fct
                       .packages = c("qpcR", "mgcv", "dplyr")
       ) %dopar% {
@@ -1636,6 +1656,7 @@ run_all_DSM <- function (segdata_obs,
           model <- mgcv::gam(as.formula(all_mods[x]),
                              data = X,
                              method = method,
+                             weights = weights,
                              select = use_select,
                              # drop.unused.levels = F,
                              knots = knots,
@@ -1644,6 +1665,7 @@ run_all_DSM <- function (segdata_obs,
           model <- mgcv::gam(as.formula(all_mods[x]),
                              data = X,
                              method = method,
+                             weights = weights,
                              select = use_select,
                              # drop.unused.levels = F,
                              family = "nb")
@@ -1693,7 +1715,7 @@ run_all_DSM <- function (segdata_obs,
         }
       }
       best_std <- foreach(x = index_order_sw,
-                          .noexport = ls()[!(ls() %in% c("segdata_obs", "all_mods", "knots", "bnd", "index_order_sw", "method",
+                          .noexport = ls()[!(ls() %in% c("weights", "segdata_obs", "all_mods", "knots", "bnd", "index_order_sw", "method",
                                                          "use_select"))], # my_dsm_fct
                           .packages = c("qpcR", "mgcv", "dplyr")
       ) %dopar% {
@@ -1705,6 +1727,7 @@ run_all_DSM <- function (segdata_obs,
           model <- mgcv::gam(as.formula(all_mods[x]),
                              data = segdata_obs,
                              method = method,
+                             weights = weights,
                              select = use_select,
                              # drop.unused.levels = F,
                              knots = knots,
@@ -1712,6 +1735,7 @@ run_all_DSM <- function (segdata_obs,
         } else {
           model <- mgcv::gam(as.formula(all_mods[x]),
                              data = segdata_obs,
+                             weights = weights,
                              method = method,
                              select = use_select,
                              # drop.unused.levels = F,
