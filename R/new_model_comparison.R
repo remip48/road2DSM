@@ -273,7 +273,8 @@ new_model_comparison <- function(run_models, # output from run_all_DSM
                       calibdata,
                       log1p_trans,
                       best_stacking,
-                      save_plots)
+                      save_plots,
+                      prediction_folder)
     } else {
       road2DSM:::run_summary_nimble(run_models,
                          response,
