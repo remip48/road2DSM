@@ -4,7 +4,8 @@ run_summary_gam <- function(run_models,
                             log1p_trans,
                             best_stacking,
                             save_plots,
-                            prediction_folder) {
+                            prediction_folder,
+                            output_file) {
 
 
   ### Modify and improve spline plot
