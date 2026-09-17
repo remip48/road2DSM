@@ -31,6 +31,7 @@
 #' @param n_cores
 #' @param title
 #' @param authors_markdown
+#' @param save_plots
 #'
 #' @return
 #' @importFrom foreach %dopar%
@@ -72,7 +73,8 @@ new_model_comparison <- function(run_models, # output from run_all_DSM
                                  authors_markdown = NULL,
                                  outfile = "log.txt",
                                  save_posterior_distribution = F,
-                                 n_cores = 1) {
+                                 n_cores = 1,
+                                 save_plots = FALSE) {
 
   type_model <- ifelse(any(class(run_models$best_models[[1]]) == "gam"),
                        "GAM",
@@ -222,6 +224,9 @@ new_model_comparison <- function(run_models, # output from run_all_DSM
     }
   })
   ##############
+
+  best_stacking <- which(run_models$all_fits_binded[1:length(run_models$best_models), ]$stacking_weights
+                         == max(run_models$all_fits_binded[1:length(run_models$best_models), ]$stacking_weights))
 
   chunk_grpsize_model <- quote({
     if (model_grpsize) {
@@ -391,11 +396,11 @@ new_model_comparison <- function(run_models, # output from run_all_DSM
   if (!file.exists(paste0(prediction_folder, "/", response, "/", version_preds,
                           "_average_predictions.gpkg")) | run_all) {
 
-   if (type_model == "GAM") {
-     list_var <- variable
-   } else {
-     list_var <- do.call("c", lapply(run_models$sm_X, function(x) {do.call("c", lapply(x, function(xx) {xx$term}))}))
-   }
+    if (type_model == "GAM") {
+      list_var <- variable
+    } else {
+      list_var <- do.call("c", lapply(run_models$sm_X, function(x) {do.call("c", lapply(x, function(xx) {xx$term}))}))
+    }
 
     cl <- parallel::makeCluster(n_cores, outfile = outfile)
     doParallel::registerDoParallel(cl)
@@ -847,7 +852,25 @@ new_model_comparison <- function(run_models, # output from run_all_DSM
                                                 ifelse(!is.na(corr_groupsize) & corr_groupsize != 1,
                                                        paste0("\nmultiplied by correction factor = ", corr_groupsize),
                                                        "")))))
-    # }
+
+    sightings <- calibdata %>%
+      filter(.data[[response]] > 0) %>%
+      st_as_sf(coords = c("X","Y"), crs = 3035)
+
+    sightings_plot <- ggplot2::ggplot() +
+      ggplot2::geom_sf(data = final %>%
+                         dplyr::filter(model == "model1") %>%
+                         dplyr::filter(areakm2 > 0) %>%
+                         dplyr::filter(!is.na(Avg_density)) %>%
+                         mutate(Avg_density = Avg_density * groupsizes_pred), ggplot2::aes(fill = cut(Avg_density,
+                                                                                                      breaks = breaks_plot,
+                                                                                                      labels = labels_plot
+                         )), color = NA) +
+      ggplot2::scale_fill_viridis_d(drop = F, name = "Average density\n(ind/km2)") +
+      ggplot2::labs(title = "Prediction with sightings") +
+      geom_sf(data = sightings, color = "red", size = 1, shape = 20, alpha = 1)
+
+    print(sightings_plot)
   })
 
   rmd_text <- c(
@@ -2045,16 +2068,16 @@ new_model_comparison <- function(run_models, # output from run_all_DSM
           #                          Abundance = mean(median, na.rm = T),
           #                          CV = round(SD / Median, 3),
           #                          Model = i) %>%
-        #         dplyr::mutate(Formula = "Median")) %>%
-        dplyr::mutate(Abundance = round(Abundance, 0),
-                      Median = round(Median, 0),
-                      Low95 = round(Low95, 0),
-                      Up95 = round(Up95, 0),
-                      SD = round(SD, 1),
-                      Low95_median = round(Low95_median, 0),
-                      Up95_median = round(Up95_median, 0),
-                      SD_median = round(SD_median, 1),
-                      n_simulation = n) %>%
+          #         dplyr::mutate(Formula = "Median")) %>%
+          dplyr::mutate(Abundance = round(Abundance, 0),
+                        Median = round(Median, 0),
+                        Low95 = round(Low95, 0),
+                        Up95 = round(Up95, 0),
+                        SD = round(SD, 1),
+                        Low95_median = round(Low95_median, 0),
+                        Up95_median = round(Up95_median, 0),
+                        SD_median = round(SD_median, 1),
+                        n_simulation = n) %>%
           dplyr::rename(mean_abundance = Abundance,
                         median_abundance = Median) %>%
           dplyr::select(Model, mean_abundance, median_abundance, Low95, Up95, Low95_median, Up95_median, CV, CV_median, SD, SD_median, Formula, n_simulation)
