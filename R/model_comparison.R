@@ -264,7 +264,8 @@ model_comparison <- function(run_models, # output from run_all_DSM
                     response,
                     calibdata,
                     log1p_trans,
-                    best_stacking)
+                    best_stacking,
+                    save_plots)
   })
 
 
