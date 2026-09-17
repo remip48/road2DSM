@@ -263,7 +263,8 @@ model_comparison <- function(run_models, # output from run_all_DSM
     road2DSM:::run_summary_gam(run_models,
                     response,
                     calibdata,
-                    log1p_trans)
+                    log1p_trans,
+                    best_stacking)
   })
 
 

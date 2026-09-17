@@ -1,7 +1,8 @@
 run_summary_gam <- function(run_models,
                             response,
                             calibdata,
-                            log1p_trans) {
+                            log1p_trans,
+                            best_stacking) {
 
 
   ### Modify and improve spline plot
