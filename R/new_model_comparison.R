@@ -161,7 +161,7 @@ new_model_comparison <- function(run_models, # output from run_all_DSM
       dplyr::select(X, Y, year, all_of(c(variable, response, effort_column))) %>%
       tidyr::drop_na()
 
-    calibdata[, variable] <- apply(calibdata[, variable], 2, rescale2)
+    calibdata[, variable] <- apply(calibdata[, variable], 2, road2DSM:::rescale2)
 
     do_plot <- F
     cat("There were", length(which(seg_data %>% pull(response) > 0)),
@@ -268,11 +268,12 @@ new_model_comparison <- function(run_models, # output from run_all_DSM
   ##############
   chunk_modeli_p1 <- quote({
     if (type_model == "GAM") {
-      run_summary_gam(run_models,
+      road2DSM:::run_summary_gam(run_models,
                       response,
-                      calibdata)
+                      calibdata,
+                      log1p_trans)
     } else {
-      run_summary_nimble(run_models,
+      road2DSM:::run_summary_nimble(run_models,
                          response,
                          calibdata)
     }
@@ -407,7 +408,7 @@ new_model_comparison <- function(run_models, # output from run_all_DSM
 
     run <- foreach::foreach(f = ls,
                             .packages = c("sf", "dplyr", "purrr", "stringr", "lubridate", "tidyr"),
-                            .noexport = ls()[!(ls() %in% c("static", "ls", "variable", "year", "calibdata", "run_all", "rescale2",
+                            .noexport = ls()[!(ls() %in% c("static", "ls", "variable", "year", "calibdata", "run_all",
                                                            "list_var",
                                                            "type_model", "run_models",
                                                            "models", "to_runm", "version_preds", "response", "log1p_trans", "effort_column", "grid_folder", "prediction_folder"))]
@@ -461,7 +462,7 @@ new_model_comparison <- function(run_models, # output from run_all_DSM
         ref <- calibdata %>%
           pull(v)
 
-        out <- data.frame(new = rescale2(ynew = gridv, y = ref))
+        out <- data.frame(new = road2DSM:::rescale2(ynew = gridv, y = ref))
 
         colnames(out) <- v
 
@@ -1090,7 +1091,7 @@ new_model_comparison <- function(run_models, # output from run_all_DSM
             to_pred <- (foreach(d = dd,
                                 .packages = c("sf", "dplyr"),
                                 .noexport = ls()[!(ls() %in% c("dd", "GridDir", "effort_column", "log1p_trans", "covariates", "ls",
-                                                               "calibdata", "response", "rescale2"))]
+                                                               "calibdata", "response"))]
             ) %dopar% {
 
               f_d <- ls[which(d == dd)]
@@ -1123,7 +1124,7 @@ new_model_comparison <- function(run_models, # output from run_all_DSM
                 ref <- calibdata %>%
                   pull(k)
 
-                newcol = rescale2(ynew = gridv, y = ref)
+                newcol = road2DSM:::rescale2(ynew = gridv, y = ref)
 
                 grid <- grid %>%
                   dplyr::select(-all_of(k)) %>%
@@ -1838,7 +1839,7 @@ new_model_comparison <- function(run_models, # output from run_all_DSM
             to_pred <- (foreach(d = dd,
                                 .packages = c("sf", "dplyr"),
                                 .noexport = ls()[!(ls() %in% c("dd", "GridDir", "effort_column", "log1p_trans", "covariates", "ls",
-                                                               "calibdata", "response", "rescale2", "list_var"))]
+                                                               "calibdata", "response", "list_var"))]
             ) %dopar% {
 
               f_d <- ls[which(d == dd)]
@@ -1871,7 +1872,7 @@ new_model_comparison <- function(run_models, # output from run_all_DSM
                 ref <- calibdata %>%
                   pull(k)
 
-                newcol = rescale2(ynew = gridv, y = ref)
+                newcol = road2DSM:::rescale2(ynew = gridv, y = ref)
 
                 grid <- grid %>%
                   dplyr::select(-all_of(k)) %>%

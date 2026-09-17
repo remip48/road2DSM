@@ -1,6 +1,7 @@
 run_summary_gam <- function(run_models,
                             response,
-                            calibdata) {
+                            calibdata,
+                            log1p_trans) {
 
 
   ### Modify and improve spline plot
