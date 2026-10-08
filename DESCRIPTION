@@ -27,6 +27,7 @@ Imports:
     dsmextra,
     foreach,
     ggnewscale,
+    glue,
     ggplot2,
     gratia,
     knitr,
@@ -44,12 +45,15 @@ Imports:
     rmapshaper,
     rmarkdown,
     sf,
+    sys,
     stars,
     stringr,
     terra,
     tidyr,
     timeDate,
+    utils,
     units,
     viridis,
     writexl
+Suggests: knitr, rmarkdown, testthat (>= 3.0.0)
 Config/roxygen2/version: 8.0.0
