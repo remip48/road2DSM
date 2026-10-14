@@ -1585,6 +1585,8 @@ model_comparison <- function(run_models, # output from run_all_DSM
             "Bottlenose_Dolphin"
           } else if (species_code == "ddel") {
             "Common_Dolphin"
+          } else if (species_code == "lalb") {
+            "White-beaked_Dolphin"
           } else if (species_code == "ddsc") {
             "Unidentified_Common_or_Striped_Dolphin"
           } else if (species_code == "all_ddsc") {
