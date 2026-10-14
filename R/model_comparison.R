@@ -1628,7 +1628,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
           # If shapefile already exists, delete it
           if (file.exists(paste0(WorkDir,"/Shapefiles/", species_name, "_model_based_distribution.shp"))){
-            base_file <- paste0(WorkDir,"/Shapefiles/", species_name, "_model_based_distribution.shp")
+            base_file <- paste0(WorkDir,"/Shapefiles/", species_name, "_model_based_distribution")
             extensions <- c(".shp", ".dbf", ".prj", ".shx")
             files_to_delete <- paste0(base_file, extensions)
             file.remove(files_to_delete)
