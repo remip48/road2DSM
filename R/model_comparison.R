@@ -32,6 +32,7 @@
 #' @param title
 #' @param authors_markdown
 #' @param save_plots
+#' @param save_shp
 #'
 #' @return
 #' @importFrom foreach %dopar%
@@ -74,7 +75,8 @@ model_comparison <- function(run_models, # output from run_all_DSM
                              outfile = "log.txt",
                              save_posterior_distribution = F,
                              n_cores = 1,
-                             save_plots = FALSE) {
+                             save_plots = FALSE,
+                             save_shp = FALSE) {
 
   type_model <- ifelse(any(class(run_models$best_models[[1]]) == "gam"),
                        "GAM",
@@ -1572,6 +1574,69 @@ model_comparison <- function(run_models, # output from run_all_DSM
           ggplot2::labs(title = paste0("Model ", i, ": Bias"))
 
         print(bias_plot)
+
+
+
+        if (save_shp & i == best_stacking){
+
+          species_name <- if (species_code == "ppho") {
+            "Harbour_porpoise"
+          } else if (species_code == "ttru") {
+            "Bottlenose_Dolphin"
+          } else if (species_code == "ddel") {
+            "Common_Dolphin"
+          } else if (species_code == "ddsc") {
+            "Unidentified_Common_or_Striped_Dolphin"
+          } else if (species_code == "all_ddsc") {
+            "Common_and_or_Striped_Dolphin"
+          } else if (species_code == "scoe") {
+            "Striped_Dolphin"
+          } else if (species_code == "bacu") {
+            "Minke_whale"
+          } else if (species_code == "bphy") {
+            "Fin_whale"
+          } else if (species_code == "beak") {
+            "Beaked_whales"
+          }
+
+
+          # Create dataframe with the wanted results
+          res <- pred_grid_cent %>%
+            # dplyr::filter(!is.na(Avg_density)) %>%
+            left_join(summary_abund_percell %>%
+                        dplyr::mutate(Median = Median_med) %>%
+                        # dplyr::mutate(Median = Median_med * groupsize,
+                        # Abundance = Abundance * groupsize) %>%
+                        dplyr::mutate(CV = CVaa) %>%
+                        dplyr::select(id, Abundance, Median, SD, CV, Low95, Up95),
+                      by = "id") %>%
+            # dplyr::filter(lengths(st_intersects(., AU)) > 0) %>%
+            dplyr::filter(!is.na(Median)) %>%
+            dplyr::filter(!is.na(CV))
+
+          res <- res %>%
+            mutate(., density = Abundance/areakm2) %>%
+            mutate(., unit = "Ind/km2") %>%
+            mutate(., Low95 = Low95/areakm2) %>%
+            mutate(., Up95 = Up95/areakm2) %>%
+            mutate(., species = species_code) %>%
+            mutate(., survey = "SCANS-IV")
+
+          res <- res[, c("id", "density", "unit", "SD", "CV", "Low95", "Up95","geometry", "species", "survey")]
+
+          # If shapefile already exists, delete it
+          if (file.exists(paste0(WorkDir,"/Shapefiles/", species_name, "_model_based_distribution.shp"))){
+            base_file <- paste0(WorkDir,"/Shapefiles/", species_name, "_model_based_distribution.shp")
+            extensions <- c(".shp", ".dbf", ".prj", ".shx")
+            files_to_delete <- paste0(base_file, extensions)
+            file.remove(files_to_delete)
+          }
+
+          # Save shapefile
+          st_write(res, paste0(WorkDir,"/Shapefiles/", species_name, "_model_based_distribution.shp"))
+
+        }
+
 
       }
     })
