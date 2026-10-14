@@ -754,7 +754,7 @@ model_comparison <- function(run_models, # output from run_all_DSM
 
     sightings_plot <- ggplot2::ggplot() +
       ggplot2::geom_sf(data = final %>%
-                         dplyr::filter(model == "model1") %>%
+                         dplyr::filter(model == paste0("model", best_stacking)) %>%
                          dplyr::filter(areakm2 > 0) %>%
                          dplyr::filter(!is.na(Avg_density)) %>%
                          mutate(Avg_density = Avg_density * groupsizes_pred), ggplot2::aes(fill = cut(Avg_density,
