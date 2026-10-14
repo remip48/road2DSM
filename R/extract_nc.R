@@ -244,7 +244,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
             unique()
           if (length(rep) == 0) {
             list_variable$file_set[i] <- paste0("file_set_",
-                                                (list_variable %>% pull(file_set) %>%
+                                                (list_sets %>% pull(file_set) %>%
                                                    str_remove_all(., fixed("file_set_")) %>%
                                                    as.numeric() %>% max(., na.rm = T)) +
                                                   1)
