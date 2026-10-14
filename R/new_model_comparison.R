@@ -901,216 +901,235 @@ new_model_comparison <- function(run_models, # output from run_all_DSM
     ""
   )
 
-  if (correct_bias & type_model == "GAM") {
-    n <- 1000
+  if (type_model == "GAM") {
+    if (correct_bias) {
+      n <- 1000
 
-    cat("Parallel processing with", ceiling(n_cores / 4), "for pseudo-posterior distribution estimate.\n")
-    cat("Parallel processing with", ceiling(ceiling(n_cores / 4) / 2), "for BIAS estimate and correction.\n")
+      cat("Parallel processing with", ceiling(n_cores / 4), "for pseudo-posterior distribution estimate.\n")
+      cat("Parallel processing with", ceiling(ceiling(n_cores / 4) / 2), "for BIAS estimate and correction.\n")
 
-    rmd_text <- c(
-      rmd_text,
-      "",
-      "",
-      "## CV estimate and bias-correction",
-      "",
-      paste0("We have the predictions of abundance per grid cell (", nrow(static),
-             "), per draw (", n, ") and per day (", length(unique(dates)),
-             "). For the estimates of CV and abundances presented in this section, we follow the method:"),
-      "",
-      "* For the estimates of total abundance:",
-      "   1.	We sum the cells per day and per draw",
-      "   2.	We average the daily abundances per simulation",
-      "   3.	We calculate the mean & SD in this pseudo-posterior distribution",
-      "",
-      "* For the estimates of CV per cell:",
-      "   1.	We average the daily abundance per cell and draw",
-      "   2.	We calculate the mean & SD in this pseudo-posterior distribution of cell abundances",
-      "",
-      "",
-      ""
-    )
+      rmd_text <- c(
+        rmd_text,
+        "",
+        "",
+        "## CV estimate and bias-correction",
+        "",
+        paste0("We have the predictions of abundance per grid cell (", nrow(static),
+               "), per draw (", n, ") and per day (", length(unique(dates)),
+               "). For the estimates of CV and abundances presented in this section, we follow the method:"),
+        "",
+        "* For the estimates of total abundance:",
+        "   1.	We sum the cells per day and per draw",
+        "   2.	We average the daily abundances per simulation",
+        "   3.	We calculate the mean & SD in this pseudo-posterior distribution",
+        "",
+        "* For the estimates of CV per cell:",
+        "   1.	We average the daily abundance per cell and draw",
+        "   2.	We calculate the mean & SD in this pseudo-posterior distribution of cell abundances",
+        "",
+        "",
+        ""
+      )
 
-    chunk_bias <- quote({
-      # pkg::fun(MASS)
+      chunk_bias <- quote({
+        # pkg::fun(MASS)
 
-      calibdata <- seg_data %>%
-        as.data.frame()
+        calibdata <- seg_data %>%
+          as.data.frame()
 
-      if (length(log1p_trans) > 0 & all(!is.na(log1p_trans))) {
-        for (k in log1p_trans) {
-          newcol <- calibdata %>%
-            pull(k) %>%
-            log1p()
+        if (length(log1p_trans) > 0 & all(!is.na(log1p_trans))) {
+          for (k in log1p_trans) {
+            newcol <- calibdata %>%
+              pull(k) %>%
+              log1p()
 
-          calibdata <- calibdata %>%
-            dplyr::select(-all_of(k)) %>%
-            mutate(new = newcol)
+            calibdata <- calibdata %>%
+              dplyr::select(-all_of(k)) %>%
+              mutate(new = newcol)
 
-          colnames(calibdata)[colnames(calibdata) == "new"] <- k
-        }
-      }
-
-      calibdata <- calibdata %>%
-        dplyr::select(X, Y, year, all_of(c(variable, response, effort_column))) %>%
-        tidyr::drop_na()
-
-      final_gp <- final %>%
-        dplyr::filter(model == unique(model)[1]) %>%
-        dplyr::mutate(area_no_BS = areakm2) %>%
-        st_drop_geometry() %>%
-        group_by(id) %>%
-        dplyr::summarise(groupsize = sum(groupsizes_pred * areakm2) / unique(areakm2_precropped),
-                         groupsize_no_BS = sum(groupsizes_pred * area_no_BS) / unique(areakm2_precropped),
-                         ratio = groupsize_no_BS / groupsize,
-                         areakm2_precropped = unique(areakm2_precropped)#,
-        ) %>%
-        ungroup() %>%
-        arrange(id) %>%
-        as.data.frame()
-
-      final_corrected <- final %>%
-        dplyr::mutate(area_no_BS = areakm2) %>%
-        st_drop_geometry() %>%
-        arrange(model, id) %>%
-        group_by(model, id_cropped) %>%
-        dplyr::summarise(id = id,
-                         groupsize = sum(groupsizes_pred * areakm2) / unique(areakm2_precropped),
-                         groupsize_no_BS = sum(groupsizes_pred * area_no_BS) / unique(areakm2_precropped),
-                         ratio = groupsize_no_BS / groupsize,
-                         areakm2_precropped = unique(areakm2_precropped),
-                         Avg_density = mean(Avg_density, na.rm = T)) %>%
-        ungroup() %>%
-        as.data.frame()
-
-      if (quantile_mgcv_fixed == "mgcv") {
-        final_threshold <- max(final_corrected$Avg_density*threshold, na.rm = T)
-      } else if (quantile_mgcv_fixed == "fixed") {
-        final_threshold <- threshold
-      }
-
-      if (!is.null(sub_area_analysis_file)) {
-        if (!file.exists(paste0(prediction_folder, "/", response, "/", version_preds,
-                                "_AU_grid_predictions.rds")) | run_all) {
-          hp <- read_sf(sub_area_analysis_file) %>%
-            st_transform(crs = 3035) %>%
-            st_cast("MULTIPOLYGON")
-
-          cl <- parallel::makeCluster(min(c(length(unique(hp$Name)), parallel::detectCores() - 1)), outfile = outfile)
-          doParallel::registerDoParallel(cl)
-
-          perHP <- do.call("rbind", foreach::foreach(n = unique(hp$Name),
-                                                     .packages = c("dplyr", "sf"),
-                                                     .noexport = ls()[!(ls() %in% c("final", "hp"))]
-          ) %dopar% {
-
-            bb <- st_bbox(hp %>%
-                            dplyr::filter(Name == n))
-
-            print(n)
-
-            out <- final %>%
-              dplyr::filter(model == unique(model)[1]) %>%
-              dplyr::filter(as.numeric(X) >= (bb[1] - 2 * mean(sqrt(final$areakm2))) & as.numeric(X) <= (bb[3] + 2 * mean(sqrt(final$areakm2))) &
-                              as.numeric(Y) >= (bb[2] - 2 * mean(sqrt(final$areakm2))) & as.numeric(Y) <= (bb[4] + 2 * mean(sqrt(final$areakm2)))) %>%
-              st_intersection(hp %>%
-                                dplyr::filter(Name == n) %>%
-                                group_by() %>%
-                                dplyr::summarise(do_union = F) %>%
-                                st_cast("MULTIPOLYGON")) %>%
-              mutate(in_hp_areakm2 = units::drop_units(st_area(.)) / 10^6,
-                     Name = n)
-
-            return(out)
-
-          })
-
-          list_id_perHP <- map_dfr(unique(hp$Name), function(n) {
-            temp <- perHP %>%
-              st_drop_geometry() %>%
-              dplyr::filter(Name == n) %>%
-              group_by(id) %>%
-              dplyr::summarise(in_hp_areakm2 = sum(in_hp_areakm2, na.rm = T))
-
-            out <- final_gp %>%
-              left_join(temp %>%
-                          dplyr::select(id, in_hp_areakm2),
-                        by = "id") %>%
-              dplyr::mutate(ratio_area_in = in_hp_areakm2 / areakm2_precropped,
-                            Name = n)
-
-            return(out)
-          })
-
-          list_id_perHP <- as.data.frame(list_id_perHP)
-
-          saveRDS(list_id_perHP, paste0(prediction_folder, "/", response, "/", version_preds,
-                                        "_AU_grid_predictions.rds"))
-        } else {
-          list_id_perHP <- readRDS(paste0(prediction_folder, "/", response, "/", version_preds,
-                                          "_AU_grid_predictions.rds"))
-        }
-      }
-
-      all_models <- run_models
-
-      for (i in to_runm) {
-        for_model <- i
-        model_folder <- i
-        GridDir <- paste0(prediction_folder, "/",
-                          response, "/model", model_folder)
-        set.seed(11)
-        gam_mod <- all_models$best_models[[for_model]]
-        model <- gam_mod
-        # covariates <- do.call("c", lapply(all_models$best_models[[i]]$smooth, function(s) {return(s$term)}))
-        # covariates <- covariates[!(covariates %in% c("X", "Y"))]
-        covariates <- variable
-        log1p_trans <- log1p_trans[log1p_trans %in% covariates]
-        ls <- list.files(GridDir)
-        ls <- ls[str_detect(ls, "_prediction_") & str_detect(ls, paste0(version_preds, "_prediction_"))]
-        ls <- do.call("c", lapply(ls, function(l) {
-          date <- str_remove_all(dplyr::last(str_split_1(l, "_")), fixed(".rds"))
-          if (any(str_detect(date, fixed(filter_year_month_not_in)))) {
-            return(NULL)
-          } else {
-            return(l)
+            colnames(calibdata)[colnames(calibdata) == "new"] <- k
           }
-        }))
+        }
 
-        dd <- do.call("c", lapply(ls, function(l) {
-          return(str_remove_all(dplyr::last(str_split_1(l, "_")), fixed(".rds")))
-        }))
+        calibdata <- calibdata %>%
+          dplyr::select(X, Y, year, all_of(c(variable, response, effort_column))) %>%
+          tidyr::drop_na()
 
-        final_correctedm <- final_corrected %>%
-          dplyr::filter(model == paste0("model", i))
+        final_gp <- final %>%
+          dplyr::filter(model == unique(model)[1]) %>%
+          dplyr::mutate(area_no_BS = areakm2) %>%
+          st_drop_geometry() %>%
+          group_by(id) %>%
+          dplyr::summarise(groupsize = sum(groupsizes_pred * areakm2) / unique(areakm2_precropped),
+                           groupsize_no_BS = sum(groupsizes_pred * area_no_BS) / unique(areakm2_precropped),
+                           ratio = groupsize_no_BS / groupsize,
+                           areakm2_precropped = unique(areakm2_precropped)#,
+          ) %>%
+          ungroup() %>%
+          arrange(id) %>%
+          as.data.frame()
 
-        if (!file.exists(paste0(GridDir, "/", version_preds, "_Abundance_CV_nonbias.RData")) | run_all) {
+        final_corrected <- final %>%
+          dplyr::mutate(area_no_BS = areakm2) %>%
+          st_drop_geometry() %>%
+          arrange(model, id) %>%
+          group_by(model, id_cropped) %>%
+          dplyr::summarise(id = id,
+                           groupsize = sum(groupsizes_pred * areakm2) / unique(areakm2_precropped),
+                           groupsize_no_BS = sum(groupsizes_pred * area_no_BS) / unique(areakm2_precropped),
+                           ratio = groupsize_no_BS / groupsize,
+                           areakm2_precropped = unique(areakm2_precropped),
+                           Avg_density = mean(Avg_density, na.rm = T)) %>%
+          ungroup() %>%
+          as.data.frame()
 
-          # source(paste0(WorkDir_CV, "/20211105_FctPredictions.R"))
-          # source(paste0(WorkDir_CV, "SCANS-IV_model", "/08_OSPAR_Matthieu_CV_estimate/20211105_FctPredictions.R"))
+        if (quantile_mgcv_fixed == "mgcv") {
+          final_threshold <- max(final_corrected$Avg_density*threshold, na.rm = T)
+        } else if (quantile_mgcv_fixed == "fixed") {
+          final_threshold <- threshold
+        }
 
-          if (!file.exists(paste0(GridDir, "/", version_preds, "_for_uncertainties.RData")) | run_all) {
-            cl <- parallel::makeCluster(parallel::detectCores() - 1)
+        if (!is.null(sub_area_analysis_file)) {
+          if (!file.exists(paste0(prediction_folder, "/", response, "/", version_preds,
+                                  "_AU_grid_predictions.rds")) | run_all) {
+            hp <- read_sf(sub_area_analysis_file) %>%
+              st_transform(crs = 3035) %>%
+              st_cast("MULTIPOLYGON")
+
+            cl <- parallel::makeCluster(min(c(length(unique(hp$Name)), parallel::detectCores() - 1)), outfile = outfile)
             doParallel::registerDoParallel(cl)
 
-            to_pred <- (foreach(d = dd,
-                                .packages = c("sf", "dplyr"),
-                                .noexport = ls()[!(ls() %in% c("dd", "GridDir", "effort_column", "log1p_trans", "covariates", "ls",
-                                                               "calibdata", "response"))]
+            perHP <- do.call("rbind", foreach::foreach(n = unique(hp$Name),
+                                                       .packages = c("dplyr", "sf"),
+                                                       .noexport = ls()[!(ls() %in% c("final", "hp"))]
             ) %dopar% {
 
-              f_d <- ls[which(d == dd)]
+              bb <- st_bbox(hp %>%
+                              dplyr::filter(Name == n))
 
-              grid <- readRDS(file = paste(GridDir, f_d, sep = "/")) %>%
-                mutate(date = d
-                )
+              print(n)
 
-              colnames(grid)[colnames(grid) == "areakm2"] <- effort_column
+              out <- final %>%
+                dplyr::filter(model == unique(model)[1]) %>%
+                dplyr::filter(as.numeric(X) >= (bb[1] - 2 * mean(sqrt(final$areakm2))) & as.numeric(X) <= (bb[3] + 2 * mean(sqrt(final$areakm2))) &
+                                as.numeric(Y) >= (bb[2] - 2 * mean(sqrt(final$areakm2))) & as.numeric(Y) <= (bb[4] + 2 * mean(sqrt(final$areakm2)))) %>%
+                st_intersection(hp %>%
+                                  dplyr::filter(Name == n) %>%
+                                  group_by() %>%
+                                  dplyr::summarise(do_union = F) %>%
+                                  st_cast("MULTIPOLYGON")) %>%
+                mutate(in_hp_areakm2 = units::drop_units(st_area(.)) / 10^6,
+                       Name = n)
 
-              if (length(log1p_trans) > 0 & all(!is.na(log1p_trans))) {
-                for (k in log1p_trans) {
-                  newcol <- grid %>%
-                    pull(k) %>%
-                    log1p()
+              return(out)
+
+            })
+
+            list_id_perHP <- map_dfr(unique(hp$Name), function(n) {
+              temp <- perHP %>%
+                st_drop_geometry() %>%
+                dplyr::filter(Name == n) %>%
+                group_by(id) %>%
+                dplyr::summarise(in_hp_areakm2 = sum(in_hp_areakm2, na.rm = T))
+
+              out <- final_gp %>%
+                left_join(temp %>%
+                            dplyr::select(id, in_hp_areakm2),
+                          by = "id") %>%
+                dplyr::mutate(ratio_area_in = in_hp_areakm2 / areakm2_precropped,
+                              Name = n)
+
+              return(out)
+            })
+
+            list_id_perHP <- as.data.frame(list_id_perHP)
+
+            saveRDS(list_id_perHP, paste0(prediction_folder, "/", response, "/", version_preds,
+                                          "_AU_grid_predictions.rds"))
+          } else {
+            list_id_perHP <- readRDS(paste0(prediction_folder, "/", response, "/", version_preds,
+                                            "_AU_grid_predictions.rds"))
+          }
+        }
+
+        all_models <- run_models
+
+        for (i in to_runm) {
+          for_model <- i
+          model_folder <- i
+          GridDir <- paste0(prediction_folder, "/",
+                            response, "/model", model_folder)
+          set.seed(11)
+          gam_mod <- all_models$best_models[[for_model]]
+          model <- gam_mod
+          # covariates <- do.call("c", lapply(all_models$best_models[[i]]$smooth, function(s) {return(s$term)}))
+          # covariates <- covariates[!(covariates %in% c("X", "Y"))]
+          covariates <- variable
+          log1p_trans <- log1p_trans[log1p_trans %in% covariates]
+          ls <- list.files(GridDir)
+          ls <- ls[str_detect(ls, "_prediction_") & str_detect(ls, paste0(version_preds, "_prediction_"))]
+          ls <- do.call("c", lapply(ls, function(l) {
+            date <- str_remove_all(dplyr::last(str_split_1(l, "_")), fixed(".rds"))
+            if (any(str_detect(date, fixed(filter_year_month_not_in)))) {
+              return(NULL)
+            } else {
+              return(l)
+            }
+          }))
+
+          dd <- do.call("c", lapply(ls, function(l) {
+            return(str_remove_all(dplyr::last(str_split_1(l, "_")), fixed(".rds")))
+          }))
+
+          final_correctedm <- final_corrected %>%
+            dplyr::filter(model == paste0("model", i))
+
+          if (!file.exists(paste0(GridDir, "/", version_preds, "_Abundance_CV_nonbias.RData")) | run_all) {
+
+            # source(paste0(WorkDir_CV, "/20211105_FctPredictions.R"))
+            # source(paste0(WorkDir_CV, "SCANS-IV_model", "/08_OSPAR_Matthieu_CV_estimate/20211105_FctPredictions.R"))
+
+            if (!file.exists(paste0(GridDir, "/", version_preds, "_for_uncertainties.RData")) | run_all) {
+              cl <- parallel::makeCluster(parallel::detectCores() - 1)
+              doParallel::registerDoParallel(cl)
+
+              to_pred <- (foreach(d = dd,
+                                  .packages = c("sf", "dplyr"),
+                                  .noexport = ls()[!(ls() %in% c("dd", "GridDir", "effort_column", "log1p_trans", "covariates", "ls",
+                                                                 "calibdata", "response"))]
+              ) %dopar% {
+
+                f_d <- ls[which(d == dd)]
+
+                grid <- readRDS(file = paste(GridDir, f_d, sep = "/")) %>%
+                  mutate(date = d
+                  )
+
+                colnames(grid)[colnames(grid) == "areakm2"] <- effort_column
+
+                if (length(log1p_trans) > 0 & all(!is.na(log1p_trans))) {
+                  for (k in log1p_trans) {
+                    newcol <- grid %>%
+                      pull(k) %>%
+                      log1p()
+
+                    grid <- grid %>%
+                      dplyr::select(-all_of(k)) %>%
+                      mutate(new = newcol)
+
+                    colnames(grid)[colnames(grid) == "new"] <- k
+                  }
+                }
+
+                for (k in covariates) {
+
+                  gridv <- grid %>%
+                    pull(k)
+
+                  ref <- calibdata %>%
+                    pull(k)
+
+                  newcol = road2DSM:::rescale2(ynew = gridv, y = ref)
 
                   grid <- grid %>%
                     dplyr::select(-all_of(k)) %>%
@@ -1118,578 +1137,561 @@ new_model_comparison <- function(run_models, # output from run_all_DSM
 
                   colnames(grid)[colnames(grid) == "new"] <- k
                 }
+
+                return(grid %>%
+                         as.data.frame())
+
+              })
+
+              parallel::stopCluster(cl)
+              gc()
+
+              parallel <- T
+
+              beta <- function(fitted_model, n_sim = 200, seed_id = 19790428) {
+                if(!is.null(seed_id)) {
+                  set.seed(seed_id)
+                } else {
+                  set.seed(sample.int(1e6, size = 1))
+                }
+                theta <- mvtnorm::rmvnorm(n_sim, mean = fitted_model$coefficients, sigma = fitted_model$Vp)
+                return(theta)
               }
 
-              for (k in covariates) {
+              n_cores <- ceiling(n_cores / 4)
 
-                gridv <- grid %>%
-                  pull(k)
+              cl <- parallel::makeCluster(n_cores)
+              doParallel::registerDoParallel(cl)
 
-                ref <- calibdata %>%
-                  pull(k)
+              theta <- beta(fitted_model = gam_mod, n_sim = 1e3)
 
-                newcol = road2DSM:::rescale2(ynew = gridv, y = ref)
+              allX <- foreach(X = to_pred,
+                              .packages = c("mgcv"),
+                              .noexport = ls()[!(ls() %in% c("gam_mod"))]) %dopar% {
+                                return(predict.gam(gam_mod, newdata = X, type = "lpmatrix"))
+                              }
 
-                grid <- grid %>%
-                  dplyr::select(-all_of(k)) %>%
-                  mutate(new = newcol)
+              parallel::stopCluster(cl)
+              gc()
 
-                colnames(grid)[colnames(grid) == "new"] <- k
-              }
+              cl <- parallel::makeCluster(floor(parallel::detectCores() / 4))
+              doParallel::registerDoParallel(cl)
 
-              return(grid %>%
-                       as.data.frame())
+              allpred <- foreach(l = allX,
+                                 .noexport = ls()[!(ls() %in% c("theta"))]) %dopar% { return(exp(l %*% t(theta))) }
 
-            })
-
-            parallel::stopCluster(cl)
-            gc()
-
-            parallel <- T
-
-            beta <- function(fitted_model, n_sim = 200, seed_id = 19790428) {
-              if(!is.null(seed_id)) {
-                set.seed(seed_id)
-              } else {
-                set.seed(sample.int(1e6, size = 1))
-              }
-              theta <- mvtnorm::rmvnorm(n_sim, mean = fitted_model$coefficients, sigma = fitted_model$Vp)
-              return(theta)
-            }
-
-            n_cores <- ceiling(n_cores / 4)
-
-            cl <- parallel::makeCluster(n_cores)
-            doParallel::registerDoParallel(cl)
-
-            theta <- beta(fitted_model = gam_mod, n_sim = 1e3)
-
-            allX <- foreach(X = to_pred,
-                            .packages = c("mgcv"),
-                            .noexport = ls()[!(ls() %in% c("gam_mod"))]) %dopar% {
-                              return(predict.gam(gam_mod, newdata = X, type = "lpmatrix"))
-                            }
-
-            parallel::stopCluster(cl)
-            gc()
-
-            cl <- parallel::makeCluster(floor(parallel::detectCores() / 4))
-            doParallel::registerDoParallel(cl)
-
-            allpred <- foreach(l = allX,
-                               .noexport = ls()[!(ls() %in% c("theta"))]) %dopar% { return(exp(l %*% t(theta))) }
-
-            parallel::stopCluster(cl)
-            rm(theta)
-            rm(allX)
-            rm(to_pred)
-            gc()
+              parallel::stopCluster(cl)
+              rm(theta)
+              rm(allX)
+              rm(to_pred)
+              gc()
 
 
-            if (save_posterior_distribution){save(allpred,
-                                                  file = paste0(GridDir, "/", version_preds, "_for_uncertainties.RData"))}
-
-          } else {
-            load(paste0(GridDir, "/", version_preds, "_for_uncertainties.RData"))
-          }
-
-          gc()
-
-          if (use_threshold) {
-
-            if (quantile_mgcv_fixed == "quantile") {
-              qq_with_cv_no_BSn <- do.call("c", map(1:length(allpred), function(x) {
-                return(quantile(c(allpred[[x]]), threshold, na.rm = T))
-              }))
-
-              q999 <- median(qq_with_cv_no_BSn)
+              if (save_posterior_distribution){save(allpred,
+                                                    file = paste0(GridDir, "/", version_preds, "_for_uncertainties.RData"))}
 
             } else {
-              q999 <- final_threshold
+              load(paste0(GridDir, "/", version_preds, "_for_uncertainties.RData"))
             }
 
-            allpred <- map(1:length(allpred), function(x) {
-              infv <- which(allpred[[x]] >= q999)
+            gc()
 
-              if (length(infv) > 0) {
-                # allpred[[x]][infv] <- NA
-                allpred[[x]][infv] <- q999
+            if (use_threshold) {
+
+              if (quantile_mgcv_fixed == "quantile") {
+                qq_with_cv_no_BSn <- do.call("c", map(1:length(allpred), function(x) {
+                  return(quantile(c(allpred[[x]]), threshold, na.rm = T))
+                }))
+
+                q999 <- median(qq_with_cv_no_BSn)
+
+              } else {
+                q999 <- final_threshold
               }
 
-              return(allpred[[x]])
-            })
-          } else {
-            q999 <- NULL
-          }
+              allpred <- map(1:length(allpred), function(x) {
+                infv <- which(allpred[[x]] >= q999)
 
-          with_cv_no_BSn <- map_dfr(1:length(allpred), function(x) {
-            out <- data.frame(Abundance = colSums(allpred[[x]] * final_gp[, "areakm2_precropped"] * final_gp[, "groupsize"] * final_gp[, "ratio"], na.rm = T),
-                              day = x) %>%
-              dplyr::mutate(simulation = 1:n())
+                if (length(infv) > 0) {
+                  # allpred[[x]][infv] <- NA
+                  allpred[[x]][infv] <- q999
+                }
 
-            return(out)
-          })
-
-          clust <- parallel::makeCluster(ceiling(n_cores / 2))
-          doParallel::registerDoParallel(clust)
-
-          per_cell <- (foreach(sim = 1:n,
-                               .packages = c("dplyr", "purrr"),
-                               .noexport = ls()[!(ls() %in% c("allpred", "final_gp"))]
-          ) %dopar% {
-            out <- map_dfr(allpred, function(x) {
-              return(data.frame(Cell_abundance = x[ ,sim] *
-                                  final_gp[, "areakm2_precropped"]
-              ) %>%
-                dplyr::mutate(
-                  cell = final_gp$id))
-            }) %>%
-              as.data.frame()
-
-            out <- out %>%
-              group_by(cell) %>%
-              dplyr::summarise(
-                mean_Cell_abundance = mean(Cell_abundance, na.rm = T),
-                Median_Cell_abundance = median(Cell_abundance, na.rm = T)#,
-              ) %>%
-              ungroup() %>%
-              dplyr::mutate(groupsize = final_gp[, "groupsize"],
-                            MaxInf_Cell_abundance = 0)
-
-            return(out)
-          }
-          )
-          per_cell <- do.call("rbind", per_cell)
-
-          parallel::stopCluster(clust)
-          gc()
-
-          if (!is.null(sub_area_analysis_file)) {
-
-            with_cp_perHP <- map_dfr(unique(list_id_perHP$Name[!is.na(list_id_perHP$Name)]), function(n) {
-              n_list_id_perHP <- list_id_perHP %>%
-                dplyr::filter(Name == n) %>%
-                dplyr::mutate(ratio_area_in = ifelse(is.na(ratio_area_in), 0, ratio_area_in)) #%>%
-
-              cell_in <- which(n_list_id_perHP$ratio_area_in > 0)
-
-              out <- map_dfr(1:length(allpred), function(x) {
-
-                out <- data.frame(Abundance = colSums(allpred[[x]][cell_in, ] * n_list_id_perHP[cell_in, "areakm2_precropped"] * n_list_id_perHP[cell_in, "groupsize"] * n_list_id_perHP[cell_in, "ratio_area_in"], na.rm = T),
-                                  day = x) %>%
-                  dplyr::mutate(simulation = 1:n(),
-                                AU = n)
-
-                return(out)
+                return(allpred[[x]])
               })
+            } else {
+              q999 <- NULL
+            }
+
+            with_cv_no_BSn <- map_dfr(1:length(allpred), function(x) {
+              out <- data.frame(Abundance = colSums(allpred[[x]] * final_gp[, "areakm2_precropped"] * final_gp[, "groupsize"] * final_gp[, "ratio"], na.rm = T),
+                                day = x) %>%
+                dplyr::mutate(simulation = 1:n())
 
               return(out)
             })
 
-            save(with_cv_no_BSn, per_cell, with_cp_perHP, q999,
-                 file = paste0(GridDir, "/", version_preds, "_Abundance_CV_nonbias.RData"))
+            clust <- parallel::makeCluster(ceiling(n_cores / 2))
+            doParallel::registerDoParallel(clust)
+
+            per_cell <- (foreach(sim = 1:n,
+                                 .packages = c("dplyr", "purrr"),
+                                 .noexport = ls()[!(ls() %in% c("allpred", "final_gp"))]
+            ) %dopar% {
+              out <- map_dfr(allpred, function(x) {
+                return(data.frame(Cell_abundance = x[ ,sim] *
+                                    final_gp[, "areakm2_precropped"]
+                ) %>%
+                  dplyr::mutate(
+                    cell = final_gp$id))
+              }) %>%
+                as.data.frame()
+
+              out <- out %>%
+                group_by(cell) %>%
+                dplyr::summarise(
+                  mean_Cell_abundance = mean(Cell_abundance, na.rm = T),
+                  Median_Cell_abundance = median(Cell_abundance, na.rm = T)#,
+                ) %>%
+                ungroup() %>%
+                dplyr::mutate(groupsize = final_gp[, "groupsize"],
+                              MaxInf_Cell_abundance = 0)
+
+              return(out)
+            }
+            )
+            per_cell <- do.call("rbind", per_cell)
+
+            parallel::stopCluster(clust)
+            gc()
+
+            if (!is.null(sub_area_analysis_file)) {
+
+              with_cp_perHP <- map_dfr(unique(list_id_perHP$Name[!is.na(list_id_perHP$Name)]), function(n) {
+                n_list_id_perHP <- list_id_perHP %>%
+                  dplyr::filter(Name == n) %>%
+                  dplyr::mutate(ratio_area_in = ifelse(is.na(ratio_area_in), 0, ratio_area_in)) #%>%
+
+                cell_in <- which(n_list_id_perHP$ratio_area_in > 0)
+
+                out <- map_dfr(1:length(allpred), function(x) {
+
+                  out <- data.frame(Abundance = colSums(allpred[[x]][cell_in, ] * n_list_id_perHP[cell_in, "areakm2_precropped"] * n_list_id_perHP[cell_in, "groupsize"] * n_list_id_perHP[cell_in, "ratio_area_in"], na.rm = T),
+                                    day = x) %>%
+                    dplyr::mutate(simulation = 1:n(),
+                                  AU = n)
+
+                  return(out)
+                })
+
+                return(out)
+              })
+
+              save(with_cv_no_BSn, per_cell, with_cp_perHP, q999,
+                   file = paste0(GridDir, "/", version_preds, "_Abundance_CV_nonbias.RData"))
+            } else {
+              save(with_cv_no_BSn, per_cell, q999,
+                   file = paste0(GridDir, "/", version_preds, "_Abundance_CV_nonbias.RData"))
+            }
+
           } else {
-            save(with_cv_no_BSn, per_cell, q999,
-                 file = paste0(GridDir, "/", version_preds, "_Abundance_CV_nonbias.RData"))
+            load(file = paste0(GridDir, "/", version_preds, "_Abundance_CV_nonbias.RData"))
+
           }
 
-        } else {
-          load(file = paste0(GridDir, "/", version_preds, "_Abundance_CV_nonbias.RData"))
+          with_cv <- with_cv_no_BSn
 
-        }
+          cat("\n\n#### Model", i, "\n")
 
-        with_cv <- with_cv_no_BSn
-
-        cat("\n\n#### Model", i, "\n")
-
-        summary_abundi <- with_cv %>% ## with_cv: total abundance per day and per simulation. Here gives the average abundance per simulation.
-          group_by(simulation) %>%
-          dplyr::summarise(median = median(Abundance, na.rm = T),
-                           Abundance = mean(Abundance, na.rm = T)) %>%
-          ungroup()
-
-        ## Calculation of total abundance based on the mgcv response output.
-        mle <- final_correctedm %>%
-          dplyr::mutate(#ratio = ifelse(species == "ppho", 1, ratio),
-            abundance = Avg_density * areakm2_precropped * groupsize * ratio) %>%
-          group_by() %>%
-          dplyr::summarise(total = sum(abundance, na.rm = T)) %>%
-          pull(total)
-
-        cat("MGCV abundance:", round(mle, 0), "inds.\n<br>")
-
-        bias <- 2 * (mean(summary_abundi$Abundance, na.rm = T) - mle)
-        # bias <- 2 * (median(summary_abundi$median, na.rm = T) - mle)
-
-        if (use_threshold) {
-          cat("Bias on total abundance estimate:", round(bias, 0), "inds.",
-              "\n<br>Threshold used:", round(q999, 4), ifelse(model_grpsize,
-                                                              "groups/km².",
-                                                              "inds/km².\n"))
-        } else {
-          cat("Bias on total abundance estimate:", round(bias, 0), "inds.",
-              "\n<br>No threshold used for bias estimate.\n")
-        }
-
-        ### here substract on mean or median
-        summary_abundi <- summary_abundi %>%
-          dplyr::mutate(median = median - bias,
-                        Abundance = Abundance - bias)
-
-        summary_abund <- summary_abundi %>%
-          # group_by(simulation) %>%
-          # dplyr::summarise(Abundance = mean(Abundance, na.rm = T)) %>%
-          group_by() %>%
-          dplyr::summarise(Low95 = quantile(Abundance, 0.025, na.rm = T),
-                           Up95 = quantile(Abundance, 0.975, na.rm = T),
-                           SD = sd(Abundance, na.rm = T),
-                           Median = median(Abundance, na.rm = T),
-                           Abundance = mean(Abundance, na.rm = T),
-                           CV = round(SD / Abundance, 3),
-                           Model = i) %>%
-          dplyr::mutate(Formula = "Mean") %>%
-          rbind(summary_abundi %>%
-                  # group_by(simulation) %>%
-                  # dplyr::summarise(Abundance = mean(Abundance, na.rm = T)) %>%
-                  group_by() %>%
-                  dplyr::summarise(Low95 = quantile(median, 0.025, na.rm = T),
-                                   Up95 = quantile(median, 0.975, na.rm = T),
-                                   SD = mad(median, na.rm = T),
-                                   Median = median(median, na.rm = T),
-                                   Abundance = mean(median, na.rm = T),
-                                   CV = round(SD / Median, 3),
-                                   Model = i) %>%
-                  dplyr::mutate(Formula = "Median")) %>%
-          dplyr::mutate(Abundance = round(Abundance, 0),
-                        Median = round(Median, 0),
-                        Low95 = round(Low95, 0),
-                        Up95 = round(Up95, 0),
-                        SD = round(SD, 1),
-                        n_simulation = n) %>%
-          dplyr::rename(mean_abundance = Abundance,
-                        median_abundance = Median) %>%
-          dplyr::select(Model, mean_abundance, median_abundance, Low95, Up95, CV, SD, Formula, n_simulation)
-
-        summary_abund <- summary_abund %>%
-          # dplyr::filter(Formula == "Median") %>%
-          dplyr::filter(Formula == "Mean") %>%
-          # dplyr::select(-c("Formula", "mean_abundance"))
-          dplyr::select(-c("Formula", "median_abundance"))
-
-        # colnames(summary_abund)[colnames(summary_abund) == "median_abundance"] <- "Abundance"
-        colnames(summary_abund)[colnames(summary_abund) == "mean_abundance"] <- "Abundance"
-
-        print(knitr::kable(summary_abund, caption = "Non-biased final abundance estimates:"))
-
-        print(ggplot2::ggplot() +
-                ggplot2::geom_histogram(data = #summary_abundi %>%
-                                          # dplyr::mutate(Formula = "Mean") %>%
-                                          # rbind(
-                                          summary_abundi %>%
-                                          # dplyr::mutate(Formula = "Median",
-                                          dplyr::mutate(Formula = "Mean",
-                                                        # Abundance = median)#)
-                                                        Abundance = Abundance)#)
-                                        , ggplot2::aes(x = Abundance), show.legend = F, fill = "midnightblue") +
-                # scale_fill_viridis_d() +
-                # scale_y_sqrt() +
-                ggplot2::scale_x_continuous(name = "Abundance") +
-                # facet_wrap(~ Formula, scales = "free") +
-                ggplot2::labs(title = paste0("Histogram of the abundances from the ", n, " simulations")))
-
-        ## Calculation of total abundance based on the mgcv response output.
-        final_abund_mgcvi <- final_correctedm %>%
-          dplyr::mutate(abundance = Avg_density * areakm2_precropped * groupsize * ratio) %>%
-          group_by(id) %>%
-          dplyr::summarise(abundance = sum(abundance, na.rm = T)) %>%
-          ungroup() %>%
-          arrange(id)
-
-        if (!is.null(sub_area_analysis_file)) {
-          final_abund_mgcv <- final_abund_mgcvi %>%
-            pull(abundance)
-
-          if (!("with_cp_perHP" %in% ls())) {
-            cat("\n\n\n")
-            stop("Function must be re-run with 'run_all = TRUE' as sub_area was not included in this initial analysis. The analysis must there be recomputed.")
-          }
-
-          summary_abund_HPi <- with_cp_perHP %>%
-            group_by(simulation, AU) %>%
+          summary_abundi <- with_cv %>% ## with_cv: total abundance per day and per simulation. Here gives the average abundance per simulation.
+            group_by(simulation) %>%
             dplyr::summarise(median = median(Abundance, na.rm = T),
                              Abundance = mean(Abundance, na.rm = T)) %>%
             ungroup()
 
-          mle_perHP <- map_dfr(unique(list_id_perHP$Name[!is.na(list_id_perHP$Name)]), function(n) {
-            n_list_id_perHP <- list_id_perHP %>%
-              dplyr::filter(Name == n) %>%
-              dplyr::mutate(ratio_area_in = ifelse(is.na(ratio_area_in), 0, ratio_area_in)) %>%
-              pull(ratio_area_in)
+          ## Calculation of total abundance based on the mgcv response output.
+          mle <- final_correctedm %>%
+            dplyr::mutate(#ratio = ifelse(species == "ppho", 1, ratio),
+              abundance = Avg_density * areakm2_precropped * groupsize * ratio) %>%
+            group_by() %>%
+            dplyr::summarise(total = sum(abundance, na.rm = T)) %>%
+            pull(total)
 
-            cell_in <- which(n_list_id_perHP > 0)
+          cat("MGCV abundance:", round(mle, 0), "inds.\n<br>")
 
-            out <- data.frame(Abundance_mgcv = sum(final_abund_mgcv[cell_in] * n_list_id_perHP[cell_in], na.rm = T)) %>%
-              dplyr::mutate(AU = n)
+          bias <- 2 * (mean(summary_abundi$Abundance, na.rm = T) - mle)
+          # bias <- 2 * (median(summary_abundi$median, na.rm = T) - mle)
 
-            return(out)
-          })
+          if (use_threshold) {
+            cat("Bias on total abundance estimate:", round(bias, 0), "inds.",
+                "\n<br>Threshold used:", round(q999, 4), ifelse(model_grpsize,
+                                                                "groups/km².",
+                                                                "inds/km².\n"))
+          } else {
+            cat("Bias on total abundance estimate:", round(bias, 0), "inds.",
+                "\n<br>No threshold used for bias estimate.\n")
+          }
 
-          summary_abund_HPi <- map_dfr(unique(summary_abund_HPi$AU), function(au) {
+          ### here substract on mean or median
+          summary_abundi <- summary_abundi %>%
+            dplyr::mutate(median = median - bias,
+                          Abundance = Abundance - bias)
 
-            out <- summary_abund_HPi %>%
-              dplyr::filter(AU == au)
-
-            mle_AU <- mle_perHP %>%
-              dplyr::filter(AU == au) %>%
-              pull(Abundance_mgcv)
-
-            bias <- 2 * (mean(out$Abundance, na.rm = T) - mle_AU)
-            # bias <- 2 * (median(out$median, na.rm = T) - mle_AU)
-
-            out <- out %>%
-              dplyr::mutate(median = median - bias,
-                            Abundance = Abundance - bias)
-
-            return(out)
-          })
-
-          summary_abund_HP <- summary_abund_HPi %>%
-            group_by(AU) %>%
+          summary_abund <- summary_abundi %>%
+            # group_by(simulation) %>%
+            # dplyr::summarise(Abundance = mean(Abundance, na.rm = T)) %>%
+            group_by() %>%
             dplyr::summarise(Low95 = quantile(Abundance, 0.025, na.rm = T),
                              Up95 = quantile(Abundance, 0.975, na.rm = T),
                              SD = sd(Abundance, na.rm = T),
                              Median = median(Abundance, na.rm = T),
                              Abundance = mean(Abundance, na.rm = T),
-                             CV = SD / Abundance,
+                             CV = round(SD / Abundance, 3),
                              Model = i) %>%
             dplyr::mutate(Formula = "Mean") %>%
-            rbind(summary_abund_HPi %>%
-                    group_by(AU) %>%
+            rbind(summary_abundi %>%
+                    # group_by(simulation) %>%
+                    # dplyr::summarise(Abundance = mean(Abundance, na.rm = T)) %>%
+                    group_by() %>%
                     dplyr::summarise(Low95 = quantile(median, 0.025, na.rm = T),
                                      Up95 = quantile(median, 0.975, na.rm = T),
                                      SD = mad(median, na.rm = T),
                                      Median = median(median, na.rm = T),
                                      Abundance = mean(median, na.rm = T),
-                                     CV = SD / Median,
+                                     CV = round(SD / Median, 3),
                                      Model = i) %>%
                     dplyr::mutate(Formula = "Median")) %>%
-            dplyr::select(AU, Model, Abundance, Median, Low95, Up95, CV, SD, Formula) %>%
-            ungroup() %>%
             dplyr::mutate(Abundance = round(Abundance, 0),
                           Median = round(Median, 0),
                           Low95 = round(Low95, 0),
                           Up95 = round(Up95, 0),
                           SD = round(SD, 1),
-                          CV = round(CV, 3),
                           n_simulation = n) %>%
-            ungroup() %>%
             dplyr::rename(mean_abundance = Abundance,
                           median_abundance = Median) %>%
             dplyr::select(Model, mean_abundance, median_abundance, Low95, Up95, CV, SD, Formula, n_simulation)
 
-          summary_abund_HP <- summary_abund_HP %>%
+          summary_abund <- summary_abund %>%
+            # dplyr::filter(Formula == "Median") %>%
             dplyr::filter(Formula == "Mean") %>%
+            # dplyr::select(-c("Formula", "mean_abundance"))
             dplyr::select(-c("Formula", "median_abundance"))
 
-          colnames(summary_abund_HP)[colnames(summary_abund_HP) == "mean_abundance"] <- "Abundance"
+          # colnames(summary_abund)[colnames(summary_abund) == "median_abundance"] <- "Abundance"
+          colnames(summary_abund)[colnames(summary_abund) == "mean_abundance"] <- "Abundance"
 
-          print(knitr::kable(summary_abund_HP))
+          print(knitr::kable(summary_abund, caption = "Non-biased final abundance estimates:"))
 
           print(ggplot2::ggplot() +
-                  ggplot2::geom_histogram(data = #summary_abund_HPi %>%
+                  ggplot2::geom_histogram(data = #summary_abundi %>%
                                             # dplyr::mutate(Formula = "Mean") %>%
                                             # rbind(
-                                            summary_abund_HPi %>%
+                                            summary_abundi %>%
+                                            # dplyr::mutate(Formula = "Median",
                                             dplyr::mutate(Formula = "Mean",
+                                                          # Abundance = median)#)
                                                           Abundance = Abundance)#)
                                           , ggplot2::aes(x = Abundance), show.legend = F, fill = "midnightblue") +
                   # scale_fill_viridis_d() +
                   # scale_y_sqrt() +
-                  ggplot2::facet_wrap(~ AU, scales = "free") +
-                  # facet_grid(AU ~ Formula, scales = "free") +
                   ggplot2::scale_x_continuous(name = "Abundance") +
-                  ggplot2::labs(title = paste0("Histogram of the abundances from the ", n, " simulations per Assessment Unit")))
-        }
+                  # facet_wrap(~ Formula, scales = "free") +
+                  ggplot2::labs(title = paste0("Histogram of the abundances from the ", n, " simulations")))
 
-        if (!("groupsize" %in% colnames(per_cell))) { # for the modelled groupsize models where groupsize was directly integrated in the creation of per_cell object
-          per_cell$groupsize <- 1
-        }
+          ## Calculation of total abundance based on the mgcv response output.
+          final_abund_mgcvi <- final_correctedm %>%
+            dplyr::mutate(abundance = Avg_density * areakm2_precropped * groupsize * ratio) %>%
+            group_by(id) %>%
+            dplyr::summarise(abundance = sum(abundance, na.rm = T)) %>%
+            ungroup() %>%
+            arrange(id)
 
-        per_cell <- per_cell %>% ## abundance per cell, per simulation (already averaged over time)
-          left_join(final_gp %>%
-                      dplyr::rename(cell = id) %>%
-                      dplyr::select(cell, ratio),
-                    by = "cell") %>%
-          dplyr::filter(ratio != 0) %>%
-          dplyr::mutate(Median_Cell_abundance = Median_Cell_abundance * ratio * groupsize,
-                        mean_Cell_abundance = mean_Cell_abundance * ratio * groupsize)
+          if (!is.null(sub_area_analysis_file)) {
+            final_abund_mgcv <- final_abund_mgcvi %>%
+              pull(abundance)
 
-        bias_percell <- per_cell %>%
-          group_by(cell) %>%
-          dplyr::summarise(mean_ab = mean(mean_Cell_abundance, na.rm = T)) %>%
-          ungroup() %>%
-          left_join(final_abund_mgcvi %>%
-                      dplyr::rename(cell = id),
-                    by = "cell") %>%
-          dplyr::mutate(bias = 2 * (mean_ab - abundance))
+            if (!("with_cp_perHP" %in% ls())) {
+              cat("\n\n\n")
+              stop("Function must be re-run with 'run_all = TRUE' as sub_area was not included in this initial analysis. The analysis must there be recomputed.")
+            }
 
-        per_cell <- per_cell %>%
-          left_join(bias_percell, by = "cell") %>%
-          dplyr::mutate(Median_Cell_abundance = Median_Cell_abundance - bias,
-                        mean_Cell_abundance = mean_Cell_abundance - bias,
-                        Median_Cell_abundance = ifelse(Median_Cell_abundance < 0, 1e-16, Median_Cell_abundance),
-                        mean_Cell_abundance = ifelse(mean_Cell_abundance < 0, 1e-16, mean_Cell_abundance))
+            summary_abund_HPi <- with_cp_perHP %>%
+              group_by(simulation, AU) %>%
+              dplyr::summarise(median = median(Abundance, na.rm = T),
+                               Abundance = mean(Abundance, na.rm = T)) %>%
+              ungroup()
 
-        summary_abund_percell <- per_cell %>%
-          group_by(cell) %>%
-          dplyr::summarise(SD_med = sd(Median_Cell_abundance, na.rm = T),
-                           SD = sd(mean_Cell_abundance, na.rm = T),
-                           mad_med = mad(Median_Cell_abundance, na.rm = T),
-                           mad = mad(mean_Cell_abundance, na.rm = T),
-                           var = SD^2,
-                           var_med = SD_med^2,
-                           groupsize = unique(groupsize),
-                           Abundance_med = mean(Median_Cell_abundance, na.rm = T),
-                           Abundance = mean(mean_Cell_abundance, na.rm = T),
-                           Median_med = median(Median_Cell_abundance, na.rm = T),
-                           Median = median(mean_Cell_abundance, na.rm = T),
-                           Max = max(MaxInf_Cell_abundance, na.rm = T),
-                           Low95 = quantile(mean_Cell_abundance, 0.025, na.rm = T),
-                           Up95 = quantile(mean_Cell_abundance, 0.975, na.rm = T)
-          ) %>%
-          ungroup() %>%
-          dplyr::mutate(CVaa = (SD / Abundance),
-                        CVam = (SD_med / Abundance_med),
-                        CVma = (mad / Median),
-                        CVmm = (mad_med / Median_med),
-                        Model = i) %>%
-          dplyr::select(cell, SD, SD_med, var, var_med, Model, Abundance, Abundance_med, Median, Median_med, Low95, Up95,
-                        groupsize,
-                        CVaa, CVam, CVma, CVmm, Max, mad, mad_med) %>%
-          dplyr::rename(id = cell)
+            mle_perHP <- map_dfr(unique(list_id_perHP$Name[!is.na(list_id_perHP$Name)]), function(n) {
+              n_list_id_perHP <- list_id_perHP %>%
+                dplyr::filter(Name == n) %>%
+                dplyr::mutate(ratio_area_in = ifelse(is.na(ratio_area_in), 0, ratio_area_in)) %>%
+                pull(ratio_area_in)
 
-        cat("\n<br>\n<br>\n<br>Sum of the cell abundances from the predictions below:", sum(summary_abund_percell$Abundance, na.rm = T), "inds\n<br>")
+              cell_in <- which(n_list_id_perHP > 0)
 
-        pred_grid_cent <- static %>%
-          dplyr::select(id, areakm2)
+              out <- data.frame(Abundance_mgcv = sum(final_abund_mgcv[cell_in] * n_list_id_perHP[cell_in], na.rm = T)) %>%
+                dplyr::mutate(AU = n)
 
-        bias_percell <- bias_percell %>%
-          mutate(id = cell)
+              return(out)
+            })
 
-        if (save_results_bias_corrected) {
-          # if (file.exists(paste0(GridDir, "/", version_preds, "_biascorrected_results_Model_", i, ".shp")) & !run_all) {
-          #   # cat("Model", i, ": File already exists! Results won't be saved.", paste0("(", GridDir, "/",
-          #   #                                                                          version_preds, "_biascorrected_results_Model_", i, ".shp)"),
-          #   #     "\n")
-          # } else {
-          # cat("Saving bias-corrected results from Model", i, "under", paste0(GridDir, "/", version_preds, "_biascorrected_results_Model_", i, ".shp"),
-          #     "\n")
+            summary_abund_HPi <- map_dfr(unique(summary_abund_HPi$AU), function(au) {
 
-          write_sf(pred_grid_cent %>%
-                     left_join(summary_abund_percell %>%
-                                 dplyr::select(id, Abundance, CVaa, Low95, Up95),
-                               by = "id") %>%
-                     dplyr::filter(!is.na(CVaa)) %>%
-                     dplyr::select(id, areakm2, Abundance, CVaa, Low95, Up95) %>%
-                     left_join(bias_percell %>%
-                                 dplyr::select(id, bias), by = "id") %>%
-                     dplyr::rename(CV = CVaa,
-                                   Corrected_bias = bias) %>%
-                     st_cast(),
-                   paste0(GridDir, "/", version_preds, "_biascorrected_results_Model_", i, ".gpkg"),
-                   append = F
-                   #ifelse(run_all, FALSE, NA)
-          )
-          # }
-        }
+              out <- summary_abund_HPi %>%
+                dplyr::filter(AU == au)
 
-        p1 <- ggplot2::ggplot() +
-          ggplot2::geom_sf(data = pred_grid_cent %>%
-                             # dplyr::filter(!is.na(Avg_density)) %>%
-                             left_join(summary_abund_percell %>%
-                                         dplyr::mutate(Median = Median_med) %>%
-                                         # dplyr::mutate(Median = Median_med * groupsize,
-                                         #               Abundance = Abundance * groupsize) %>%
-                                         dplyr::select(id, Abundance, Median),
-                                       by = "id") %>%
-                             dplyr::filter(!is.na(Abundance)), ggplot2::aes(fill = cut(Abundance / areakm2,
-                                                                                       # breaks = c(-1,.4,.8,1.2,1.5,2,2.5,3,3.5,100),
-                                                                                       breaks = breaks_plot,
-                                                                                       # labels = c("0.00 - 0.40", "0.41 - 0.80", "0.81 - 1.20",
-                                                                                       #            "1.21 - 1.50", "1.51 - 2.00", "2.01 - 2.50",
-                                                                                       #            "2.51 - 3.00", "3.01 - 3.50", "> 3.50")
-                                                                                       labels = labels_plot
-                             )), color = NA) +
-          ggplot2::scale_fill_viridis_d(drop = F, name = "Density\n(ind/km2)", #\naveraged between days,\nmedian between simulation)"
-          ) +
-          ggplot2::labs(title = ifelse(model_grpsize,
-                                       # paste0("Model ", i, ": predictions multiplied by\naverage groupsize per SCANS-IV block"),
-                                       paste0("Model ", i, ": predictions"),
-                                       paste0("Model ", i, ": predictions")))
+              mle_AU <- mle_perHP %>%
+                dplyr::filter(AU == au) %>%
+                pull(Abundance_mgcv)
 
-        print(p1)
+              bias <- 2 * (mean(out$Abundance, na.rm = T) - mle_AU)
+              # bias <- 2 * (median(out$median, na.rm = T) - mle_AU)
 
-        cat("\n<br>\n<br>")
+              out <- out %>%
+                dplyr::mutate(median = median - bias,
+                              Abundance = Abundance - bias)
 
-        p2 <- ggplot2::ggplot() +
-          ggplot2::geom_sf(data = pred_grid_cent %>%
-                             # dplyr::filter(!is.na(Avg_density)) %>%
-                             left_join(summary_abund_percell %>%
-                                         dplyr::mutate(CVma = CVmm) %>%
-                                         dplyr::select(id, CVma, CVaa),
-                                       by = "id") %>%
-                             dplyr::filter(!is.na(CVaa)), ggplot2::aes(fill = cut(CVaa,
-                                                                                  # breaks = c(-1, seq(.1, 1, .1), 2, Inf),
-                                                                                  breaks = c(-1, 0.1, 0.25, .5, 1, 1.5, 2, Inf),
-                                                                                  # labels = c("0.00 - 0.10", "0.11 - 0.20", "0.21 - 0.30",
-                                                                                  #            "0.31 - 0.40", "0.41 - 0.50", "0.51 - 0.60",
-                                                                                  #            "0.61 - 0.70", "0.71 - 0.80", "0.81 - 0.90",
-                                                                                  #            "0.91 - 1.00", "1.01 - 2.00", "> 2.00")
-                                                                                  labels = c("0.00 - 0.10", "0.11 - 0.25", "0.26 - 0.50", "0.51 - 1.00",
-                                                                                             "1.01 - 1.50",
-                                                                                             "1.51 - 2.00", "> 2.00"))), color = NA) +
-          ggplot2::scale_fill_viridis_d(name = "CV", drop = F) +
-          ggplot2::labs(title = paste0("Model ", i, ": CV"))
+              return(out)
+            })
 
-        if (any(summary_abund_percell$Max == Inf)) {
-          # pkg::fun(ggnewscale)
+            summary_abund_HP <- summary_abund_HPi %>%
+              group_by(AU) %>%
+              dplyr::summarise(Low95 = quantile(Abundance, 0.025, na.rm = T),
+                               Up95 = quantile(Abundance, 0.975, na.rm = T),
+                               SD = sd(Abundance, na.rm = T),
+                               Median = median(Abundance, na.rm = T),
+                               Abundance = mean(Abundance, na.rm = T),
+                               CV = SD / Abundance,
+                               Model = i) %>%
+              dplyr::mutate(Formula = "Mean") %>%
+              rbind(summary_abund_HPi %>%
+                      group_by(AU) %>%
+                      dplyr::summarise(Low95 = quantile(median, 0.025, na.rm = T),
+                                       Up95 = quantile(median, 0.975, na.rm = T),
+                                       SD = mad(median, na.rm = T),
+                                       Median = median(median, na.rm = T),
+                                       Abundance = mean(median, na.rm = T),
+                                       CV = SD / Median,
+                                       Model = i) %>%
+                      dplyr::mutate(Formula = "Median")) %>%
+              dplyr::select(AU, Model, Abundance, Median, Low95, Up95, CV, SD, Formula) %>%
+              ungroup() %>%
+              dplyr::mutate(Abundance = round(Abundance, 0),
+                            Median = round(Median, 0),
+                            Low95 = round(Low95, 0),
+                            Up95 = round(Up95, 0),
+                            SD = round(SD, 1),
+                            CV = round(CV, 3),
+                            n_simulation = n) %>%
+              ungroup() %>%
+              dplyr::rename(mean_abundance = Abundance,
+                            median_abundance = Median) %>%
+              dplyr::select(Model, mean_abundance, median_abundance, Low95, Up95, CV, SD, Formula, n_simulation)
 
-          infvalue <- summary_abund_percell %>%
-            dplyr::filter(Max == Inf)
+            summary_abund_HP <- summary_abund_HP %>%
+              dplyr::filter(Formula == "Mean") %>%
+              dplyr::select(-c("Formula", "median_abundance"))
 
-          p2 <- p2 +
-            ggnewscale::new_scale_fill() +
+            colnames(summary_abund_HP)[colnames(summary_abund_HP) == "mean_abundance"] <- "Abundance"
+
+            print(knitr::kable(summary_abund_HP))
+
+            print(ggplot2::ggplot() +
+                    ggplot2::geom_histogram(data = #summary_abund_HPi %>%
+                                              # dplyr::mutate(Formula = "Mean") %>%
+                                              # rbind(
+                                              summary_abund_HPi %>%
+                                              dplyr::mutate(Formula = "Mean",
+                                                            Abundance = Abundance)#)
+                                            , ggplot2::aes(x = Abundance), show.legend = F, fill = "midnightblue") +
+                    # scale_fill_viridis_d() +
+                    # scale_y_sqrt() +
+                    ggplot2::facet_wrap(~ AU, scales = "free") +
+                    # facet_grid(AU ~ Formula, scales = "free") +
+                    ggplot2::scale_x_continuous(name = "Abundance") +
+                    ggplot2::labs(title = paste0("Histogram of the abundances from the ", n, " simulations per Assessment Unit")))
+          }
+
+          if (!("groupsize" %in% colnames(per_cell))) { # for the modelled groupsize models where groupsize was directly integrated in the creation of per_cell object
+            per_cell$groupsize <- 1
+          }
+
+          per_cell <- per_cell %>% ## abundance per cell, per simulation (already averaged over time)
+            left_join(final_gp %>%
+                        dplyr::rename(cell = id) %>%
+                        dplyr::select(cell, ratio),
+                      by = "cell") %>%
+            dplyr::filter(ratio != 0) %>%
+            dplyr::mutate(Median_Cell_abundance = Median_Cell_abundance * ratio * groupsize,
+                          mean_Cell_abundance = mean_Cell_abundance * ratio * groupsize)
+
+          bias_percell <- per_cell %>%
+            group_by(cell) %>%
+            dplyr::summarise(mean_ab = mean(mean_Cell_abundance, na.rm = T)) %>%
+            ungroup() %>%
+            left_join(final_abund_mgcvi %>%
+                        dplyr::rename(cell = id),
+                      by = "cell") %>%
+            dplyr::mutate(bias = 2 * (mean_ab - abundance))
+
+          per_cell <- per_cell %>%
+            left_join(bias_percell, by = "cell") %>%
+            dplyr::mutate(Median_Cell_abundance = Median_Cell_abundance - bias,
+                          mean_Cell_abundance = mean_Cell_abundance - bias,
+                          Median_Cell_abundance = ifelse(Median_Cell_abundance < 0, 1e-16, Median_Cell_abundance),
+                          mean_Cell_abundance = ifelse(mean_Cell_abundance < 0, 1e-16, mean_Cell_abundance))
+
+          summary_abund_percell <- per_cell %>%
+            group_by(cell) %>%
+            dplyr::summarise(SD_med = sd(Median_Cell_abundance, na.rm = T),
+                             SD = sd(mean_Cell_abundance, na.rm = T),
+                             mad_med = mad(Median_Cell_abundance, na.rm = T),
+                             mad = mad(mean_Cell_abundance, na.rm = T),
+                             var = SD^2,
+                             var_med = SD_med^2,
+                             groupsize = unique(groupsize),
+                             Abundance_med = mean(Median_Cell_abundance, na.rm = T),
+                             Abundance = mean(mean_Cell_abundance, na.rm = T),
+                             Median_med = median(Median_Cell_abundance, na.rm = T),
+                             Median = median(mean_Cell_abundance, na.rm = T),
+                             Max = max(MaxInf_Cell_abundance, na.rm = T),
+                             Low95 = quantile(mean_Cell_abundance, 0.025, na.rm = T),
+                             Up95 = quantile(mean_Cell_abundance, 0.975, na.rm = T)
+            ) %>%
+            ungroup() %>%
+            dplyr::mutate(CVaa = (SD / Abundance),
+                          CVam = (SD_med / Abundance_med),
+                          CVma = (mad / Median),
+                          CVmm = (mad_med / Median_med),
+                          Model = i) %>%
+            dplyr::select(cell, SD, SD_med, var, var_med, Model, Abundance, Abundance_med, Median, Median_med, Low95, Up95,
+                          groupsize,
+                          CVaa, CVam, CVma, CVmm, Max, mad, mad_med) %>%
+            dplyr::rename(id = cell)
+
+          cat("\n<br>\n<br>\n<br>Sum of the cell abundances from the predictions below:", sum(summary_abund_percell$Abundance, na.rm = T), "inds\n<br>")
+
+          pred_grid_cent <- static %>%
+            dplyr::select(id, areakm2)
+
+          bias_percell <- bias_percell %>%
+            mutate(id = cell)
+
+          if (save_results_bias_corrected) {
+            # if (file.exists(paste0(GridDir, "/", version_preds, "_biascorrected_results_Model_", i, ".shp")) & !run_all) {
+            #   # cat("Model", i, ": File already exists! Results won't be saved.", paste0("(", GridDir, "/",
+            #   #                                                                          version_preds, "_biascorrected_results_Model_", i, ".shp)"),
+            #   #     "\n")
+            # } else {
+            # cat("Saving bias-corrected results from Model", i, "under", paste0(GridDir, "/", version_preds, "_biascorrected_results_Model_", i, ".shp"),
+            #     "\n")
+
+            write_sf(pred_grid_cent %>%
+                       left_join(summary_abund_percell %>%
+                                   dplyr::select(id, Abundance, CVaa, Low95, Up95),
+                                 by = "id") %>%
+                       dplyr::filter(!is.na(CVaa)) %>%
+                       dplyr::select(id, areakm2, Abundance, CVaa, Low95, Up95) %>%
+                       left_join(bias_percell %>%
+                                   dplyr::select(id, bias), by = "id") %>%
+                       dplyr::rename(CV = CVaa,
+                                     Corrected_bias = bias) %>%
+                       st_cast(),
+                     paste0(GridDir, "/", version_preds, "_biascorrected_results_Model_", i, ".gpkg"),
+                     append = F
+                     #ifelse(run_all, FALSE, NA)
+            )
+            # }
+          }
+
+          p1 <- ggplot2::ggplot() +
             ggplot2::geom_sf(data = pred_grid_cent %>%
-                               dplyr::filter(id %in% infvalue$id) %>%
-                               left_join(infvalue %>%
-                                           dplyr::select(id, Max),
+                               # dplyr::filter(!is.na(Avg_density)) %>%
+                               left_join(summary_abund_percell %>%
+                                           dplyr::mutate(Median = Median_med) %>%
+                                           # dplyr::mutate(Median = Median_med * groupsize,
+                                           #               Abundance = Abundance * groupsize) %>%
+                                           dplyr::select(id, Abundance, Median),
                                          by = "id") %>%
-                               dplyr::mutate(Infinite_value = ""), ggplot2::aes(fill = factor(Infinite_value)), color = NA) +
-            ggplot2::scale_fill_manual(values = "red", name = paste0(nrow(infvalue), " cells with an\ninfinite value\nin one of\nthe simulations~days"))
+                               dplyr::filter(!is.na(Abundance)), ggplot2::aes(fill = cut(Abundance / areakm2,
+                                                                                         # breaks = c(-1,.4,.8,1.2,1.5,2,2.5,3,3.5,100),
+                                                                                         breaks = breaks_plot,
+                                                                                         # labels = c("0.00 - 0.40", "0.41 - 0.80", "0.81 - 1.20",
+                                                                                         #            "1.21 - 1.50", "1.51 - 2.00", "2.01 - 2.50",
+                                                                                         #            "2.51 - 3.00", "3.01 - 3.50", "> 3.50")
+                                                                                         labels = labels_plot
+                               )), color = NA) +
+            ggplot2::scale_fill_viridis_d(drop = F, name = "Density\n(ind/km2)", #\naveraged between days,\nmedian between simulation)"
+            ) +
+            ggplot2::labs(title = ifelse(model_grpsize,
+                                         # paste0("Model ", i, ": predictions multiplied by\naverage groupsize per SCANS-IV block"),
+                                         paste0("Model ", i, ": predictions"),
+                                         paste0("Model ", i, ": predictions")))
+
+          print(p1)
+
+          cat("\n<br>\n<br>")
+
+          p2 <- ggplot2::ggplot() +
+            ggplot2::geom_sf(data = pred_grid_cent %>%
+                               # dplyr::filter(!is.na(Avg_density)) %>%
+                               left_join(summary_abund_percell %>%
+                                           dplyr::mutate(CVma = CVmm) %>%
+                                           dplyr::select(id, CVma, CVaa),
+                                         by = "id") %>%
+                               dplyr::filter(!is.na(CVaa)), ggplot2::aes(fill = cut(CVaa,
+                                                                                    # breaks = c(-1, seq(.1, 1, .1), 2, Inf),
+                                                                                    breaks = c(-1, 0.1, 0.25, .5, 1, 1.5, 2, Inf),
+                                                                                    # labels = c("0.00 - 0.10", "0.11 - 0.20", "0.21 - 0.30",
+                                                                                    #            "0.31 - 0.40", "0.41 - 0.50", "0.51 - 0.60",
+                                                                                    #            "0.61 - 0.70", "0.71 - 0.80", "0.81 - 0.90",
+                                                                                    #            "0.91 - 1.00", "1.01 - 2.00", "> 2.00")
+                                                                                    labels = c("0.00 - 0.10", "0.11 - 0.25", "0.26 - 0.50", "0.51 - 1.00",
+                                                                                               "1.01 - 1.50",
+                                                                                               "1.51 - 2.00", "> 2.00"))), color = NA) +
+            ggplot2::scale_fill_viridis_d(name = "CV", drop = F) +
+            ggplot2::labs(title = paste0("Model ", i, ": CV"))
+
+          if (any(summary_abund_percell$Max == Inf)) {
+            # pkg::fun(ggnewscale)
+
+            infvalue <- summary_abund_percell %>%
+              dplyr::filter(Max == Inf)
+
+            p2 <- p2 +
+              ggnewscale::new_scale_fill() +
+              ggplot2::geom_sf(data = pred_grid_cent %>%
+                                 dplyr::filter(id %in% infvalue$id) %>%
+                                 left_join(infvalue %>%
+                                             dplyr::select(id, Max),
+                                           by = "id") %>%
+                                 dplyr::mutate(Infinite_value = ""), ggplot2::aes(fill = factor(Infinite_value)), color = NA) +
+              ggplot2::scale_fill_manual(values = "red", name = paste0(nrow(infvalue), " cells with an\ninfinite value\nin one of\nthe simulations~days"))
+          }
+
+          print(p2)
+
+          cat("\n<br>\n<br>")
+
+          test <- pred_grid_cent %>%
+            left_join(bias_percell, by = "id")
+
+          bias_plot <- ggplot2::ggplot() +
+            ggplot2::geom_sf(data = test , ggplot2::aes(fill = bias), color = NA) +
+            ggplot2::scale_fill_viridis_c(name = "Bias") +
+            ggplot2::labs(title = paste0("Model ", i, ": Bias"))
+
+          print(bias_plot)
         }
+      })
 
-        print(p2)
-
-        cat("\n<br>\n<br>")
-
-        test <- pred_grid_cent %>%
-          left_join(bias_percell, by = "id")
-
-        bias_plot <- ggplot2::ggplot() +
-          ggplot2::geom_sf(data = test , ggplot2::aes(fill = bias), color = NA) +
-          ggplot2::scale_fill_viridis_c(name = "Bias") +
-          ggplot2::labs(title = paste0("Model ", i, ": Bias"))
-
-        print(bias_plot)
-      }
-    })
-
-    rmd_text <- c(
-      rmd_text,
-      "```{r CV_abund_pred, echo=FALSE, eval=TRUE, results='asis'}",
-      paste(deparse(chunk_bias), collapse = "\n"),
-      "```"
-    )
+      rmd_text <- c(
+        rmd_text,
+        "```{r CV_abund_pred, echo=FALSE, eval=TRUE, results='asis'}",
+        paste(deparse(chunk_bias), collapse = "\n"),
+        "```"
+      )
+    }
   } else {
     n <- 1000
 
