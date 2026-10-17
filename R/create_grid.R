@@ -76,13 +76,6 @@ create_grid <- function(effort,
                   Y = listY[which.min(abs(Y - listY))]) %>%
     ungroup()
 
-  cc <- grid5km %>%
-    sf::st_drop_geometry() %>%
-    sf::st_as_sf(coords = c("X", "Y"), crs = sf::st_crs(effort)) %>%
-    sf::st_transform(crs = 4326) %>%
-    dplyr::mutate(lon_cent = st_coordinates(.)[,1],
-                  lat_cent = st_coordinates(.)[,2])
-
   if (all(!is.null(sea))) {
     sea <- sea %>%
       st_transform(crs = st_crs(effort)) %>%
@@ -122,6 +115,13 @@ create_grid <- function(effort,
 
     cat("Coordinates written in the output files are coordinates of the initial centroid (before intersecting with country).\n")
   }
+
+  cc <- grid5km %>%
+    sf::st_drop_geometry() %>%
+    sf::st_as_sf(coords = c("X", "Y"), crs = sf::st_crs(effort)) %>%
+    sf::st_transform(crs = 4326) %>%
+    dplyr::mutate(lon_cent = st_coordinates(.)[,1],
+                  lat_cent = st_coordinates(.)[,2])
 
   grid5km <- grid5km %>%
     dplyr::mutate(area_km2 = units::drop_units(st_area(.)) / 10^6)
