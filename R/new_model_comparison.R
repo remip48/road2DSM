@@ -407,7 +407,7 @@ new_model_comparison <- function(run_models, # output from run_all_DSM
       list_var <- do.call("c", lapply(run_models$sm_X, function(x) {do.call("c", lapply(x, function(xx) {xx$term}))}))
     }
 
-    cl <- parallel::makeCluster(n_cores, outfile = outfile)
+    cl <- parallel::makeCluster(min(c(detectCores(), n_cores)), outfile = outfile)
     doParallel::registerDoParallel(cl)
 
     run <- foreach::foreach(f = ls,
@@ -1158,7 +1158,7 @@ new_model_comparison <- function(run_models, # output from run_all_DSM
                 return(theta)
               }
 
-              n_cores <- ceiling(n_cores / 4)
+              n_cores <- min(c(detectCores(), ceiling(n_cores / 4)))
 
               cl <- parallel::makeCluster(n_cores)
               doParallel::registerDoParallel(cl)
@@ -1904,7 +1904,7 @@ new_model_comparison <- function(run_models, # output from run_all_DSM
 
             parallel <- T
 
-            n_cores <- ceiling(n_cores / 4)
+            n_cores <- min(c(detectCores(), ceiling(n_cores / 4)))
 
             cl <- parallel::makeCluster(floor(parallel::detectCores() / 4))
             doParallel::registerDoParallel(cl)
