@@ -1691,6 +1691,13 @@ new_model_comparison <- function(run_models, # output from run_all_DSM
         paste(deparse(chunk_bias), collapse = "\n"),
         "```"
       )
+    } else {
+      # final %>%
+      #   dplyr::filter(areakm2 > 0) %>%
+      #   dplyr::filter(!is.na(Avg_density)) %>%
+      #   mutate(Avg_density = Avg_density * groupsizes_pred) %>%
+      #   group_by(model) %>%
+      #   dplyr::summarise()
     }
   } else {
     n <- 1000
