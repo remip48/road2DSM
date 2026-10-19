@@ -437,9 +437,9 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                                                            lat))]) %>% ungroup() %>% dplyr::mutate(lon_cent = loni,
                                                                                                                    lat_cent = lati) %>% dplyr::select(-c(layer,
                                                                                                                                                          loni, lati))
-                                res_lat <- median(sort(lat)[-1] - sort(lat)[-length(lat)],
+                                res_lat <- max(sort(lat)[-1] - sort(lat)[-length(lat)],
                                                   na.rm = T) * (max(all_pixel.radius) + 0.5)
-                                res_lon <- median(sort(lon)[-1] - sort(lon)[-length(lon)],
+                                res_lon <- max(sort(lon)[-1] - sort(lon)[-length(lon)],
                                                   na.rm = T) * (max(all_pixel.radius) + 0.5)
 
                                 data <- data %>% dplyr::filter(lon_cent >= (lonmin - res_lon),
@@ -469,43 +469,44 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
     }
     else {
       new_grid <- read_sf(paste0(nc.path, "/", f, ".shp"))
+    }
 
-      datafile <- paste(nc.path, first(ncinfoi$nc.name[ncinfoi$file_set ==
-                                                         f]), sep = "/")
-      nc.data <- nc_open(datafile)
-      namedims <- names(nc.data$dim)
+    datafile <- paste(nc.path, first(ncinfoi$nc.name[ncinfoi$file_set ==
+                                                       f]), sep = "/")
+    nc.data <- nc_open(datafile)
+    namedims <- names(nc.data$dim)
+    test <- try({
+      lat <- c(unique(as.vector(ncvar_get(nc.data,
+                                          namedims[namedims == name_dimension[["lat"]]]))))
+      lon <- c(unique(as.vector(ncvar_get(nc.data,
+                                          namedims[namedims == name_dimension[["lon"]]]))))
+    })
+    if (all(class(test) == "try-error")) {
+      namedims <- names(nc.data$var)
       test <- try({
         lat <- c(unique(as.vector(ncvar_get(nc.data,
                                             namedims[namedims == name_dimension[["lat"]]]))))
         lon <- c(unique(as.vector(ncvar_get(nc.data,
                                             namedims[namedims == name_dimension[["lon"]]]))))
       })
-      if (all(class(test) == "try-error")) {
-        namedims <- names(nc.data$var)
-        test <- try({
-          lat <- c(unique(as.vector(ncvar_get(nc.data,
-                                              namedims[namedims == name_dimension[["lat"]]]))))
-          lon <- c(unique(as.vector(ncvar_get(nc.data,
-                                              namedims[namedims == name_dimension[["lon"]]]))))
-        })
-      }
-      rm(nc.data)
-      rm(namedims)
-      res_lat <- median(sort(lat)[-1] - sort(lat)[-length(lat)],
-                        na.rm = T) * (max(all_pixel.radius) + 0.5)
-      res_lon <- median(sort(lon)[-1] - sort(lon)[-length(lon)],
-                        na.rm = T) * (max(all_pixel.radius) + 0.5)
-
-      new_grid <- new_grid %>% dplyr::filter(lon_cent >= (lonmin - res_lon),
-                                             lon_cent <= (lonmax + res_lon), lat_cent >= (latmin - res_lat), lat_cent <=
-                                               (latmax + res_lat))
-
-      rm(res_lon)
-      rm(res_lat)
-      rm(lon)
-      rm(lat)
-      rm(test)
     }
+    rm(nc.data)
+    rm(namedims)
+    res_lat <- max(sort(lat)[-1] - sort(lat)[-length(lat)],
+                   na.rm = T) * (max(all_pixel.radius) + 0.5)
+    res_lon <- max(sort(lon)[-1] - sort(lon)[-length(lon)],
+                   na.rm = T) * (max(all_pixel.radius) + 0.5)
+
+    new_grid <- new_grid %>% dplyr::filter(lon_cent >= (lonmin - res_lon),
+                                           lon_cent <= (lonmax + res_lon), lat_cent >= (latmin - res_lat), lat_cent <=
+                                             (latmax + res_lat))
+
+    # rm(res_lon)
+    # rm(res_lat)
+    # rm(lon)
+    # rm(lat)
+    rm(test)
+
     data <- new_grid %>% st_drop_geometry() %>% dplyr::select(lon_cent,
                                                               lat_cent, id)
     Predictor.name_ref <- variable
@@ -533,14 +534,12 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
     if (is.null(n_cores)) {
       n_cores <- detectCores() * 2/4
     }
-    llon <- unique(data$lon_cent)
-    llat <- unique(data$lat_cent)
+    llon <- lon
+    llat <- lat
     # dlon <- median(sort(llon)[-1] - sort(llon)[-length(llon)])
     # dlat <- median(sort(llat)[-1] - sort(llat)[-length(llat)])
-    dlat <- median(sort(llat)[-1] - sort(llat)[-length(llat)],
-                   na.rm = T) * (max(all_pixel.radius) + 0.5)
-    dlon <- median(sort(llon)[-1] - sort(llon)[-length(llon)],
-                   na.rm = T) * (max(all_pixel.radius) + 0.5)
+    dlat <- res_lat
+    dlon <- res_lon
     # udatalon <- unique(data$lon_cent[data$lon_cent >= lonmin & data$lon_cent <= lonmax &
     #                                    data$lat_cent >= latmin & data$lat_cent <= latmax])
     cat("Parallel processing with", n_cores, "cores will be used. Check that computed can handle it.\n\n",
@@ -968,16 +967,17 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                   na.rm = T) * (pixel.radius + 0.5)
                 outM <- map_dfr(unique(data$lon_cent),
                                 function(l) {
-                                  data.var_ref_t1l <- data.var_ref_t1[abs(l -
-                                                                            data.var_ref_t1$lon) <= res_lon,
-                                  ]
+                                  data.var_ref_t1l <- data.var_ref_t1[abs(l - data.var_ref_t1$lon) <= res_lon, ]
                                   return(data[data$lon_cent == l, ] %>%
-                                           group_by(id) %>% group_map(~{
-                                             c(lat_cent = .x$lat_cent, lon_cent = .x$lon_cent,
-                                               id = .y$id, id_nc = paste(data.var_ref_t1l$id_nc[abs(.x$lat_cent -
-                                                                                                      data.var_ref_t1l$lat) <= res_lat],
-                                                                         collapse = ","))
-                                           }) %>% bind_rows())
+                                           group_by(id) %>%
+                                           group_map(~{
+                                             c(lat_cent = .x$lat_cent,
+                                               lon_cent = .x$lon_cent,
+                                               id = .y$id,
+                                               id_nc = paste(data.var_ref_t1l$id_nc[abs(.x$lat_cent - data.var_ref_t1l$lat) <= res_lat],
+                                                             collapse = ","))
+                                           }) %>%
+                                           bind_rows())
                                 }) %>% group_by(id) %>% dplyr::reframe(id_nc = str_split_1(id_nc,
                                                                                            ","), lon_cent = lon_cent, lat_cent = lat_cent) %>%
                   dplyr::mutate(across(colnames(.), ~as.numeric(.x))) %>%
