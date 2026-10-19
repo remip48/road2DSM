@@ -501,6 +501,9 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                            lon_cent <= (lonmax + res_lon), lat_cent >= (latmin - res_lat), lat_cent <=
                                              (latmax + res_lat))
 
+    lon <- lon[lon >= (lonmin - res_lon) & lon <= (lonmax + res_lon)]
+    lat <- lat[lat >= (latmin - res_lat) & lat <= (latmax + res_lat)]
+
     # rm(res_lon)
     # rm(res_lat)
     # rm(lon)
