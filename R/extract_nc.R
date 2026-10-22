@@ -981,14 +981,21 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                                              collapse = ","))
                                            }) %>%
                                            bind_rows())
-                                }) %>% group_by(id) %>% dplyr::reframe(id_nc = str_split_1(id_nc,
-                                                                                           ","), lon_cent = lon_cent, lat_cent = lat_cent) %>%
+                                }) %>%
+                  dplyr::filter(lon_cent >= (lonmin - res_lon / ((pixel.radius + 0.5) * 2))) %>%
+                  dplyr::filter(lon_cent <= (lonmax + res_lon / ((pixel.radius + 0.5) * 2))) %>%
+                  dplyr::filter(lat_cent >= (latmin - res_lat / ((pixel.radius + 0.5) * 2))) %>%
+                  dplyr::filter(lat_cent <= (latmax + res_lat / ((pixel.radius + 0.5) * 2))) %>%
+                  group_by(id) %>%
+                  dplyr::reframe(id_nc = str_split_1(id_nc, ","),
+                                 lon_cent = lon_cent,
+                                 lat_cent = lat_cent) %>%
                   dplyr::mutate(across(colnames(.), ~as.numeric(.x))) %>%
                   left_join(data.var_ref, by = "id_nc",
                             relationship = "many-to-many") %>%
-                  dplyr::mutate(dist = abs(lat_cent -
-                                             lat) + abs(lon_cent - lon)) %>% dplyr::select(id,
-                                                                                           t, id_nc, dist, all_of(Predictor.name))
+                  dplyr::mutate(dist = abs(lat_cent - lat) + abs(lon_cent - lon)) %>%
+                  dplyr::select(id, t, id_nc, dist, all_of(Predictor.name))
+
                 if (run_mean_SDspace) {
                   outM <- as.data.table(outM)
                   # rm(outM)
