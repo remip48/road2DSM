@@ -982,6 +982,9 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                            }) %>%
                                            bind_rows())
                                 }) %>%
+                  # ungroup() %>%
+                  dplyr::mutate(lon_cent = as.numeric(lon_cent),
+                                lat_cent = as.numeric(lat_cent)) %>%
                   dplyr::filter(lon_cent >= (lonmin - res_lon / ((pixel.radius + 0.5) * 2))) %>%
                   dplyr::filter(lon_cent <= (lonmax + res_lon / ((pixel.radius + 0.5) * 2))) %>%
                   dplyr::filter(lat_cent >= (latmin - res_lat / ((pixel.radius + 0.5) * 2))) %>%
