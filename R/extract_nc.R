@@ -36,13 +36,13 @@
 
 
 extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
-                         resolution = "day", all_time.period, dates, lonmin = -Inf,
-                         latmin = -Inf, lonmax = Inf, latmax = Inf, name_dimension = list(lon = "lon",
-                                                                                          lat = "lat", time = NULL, depth = NULL), max_depth = Inf,
-                         # lonmin_grid = NULL, latmin_grid = NULL, lonmax_grid = NULL, latmax_grid = NULL,
-                         vertical_variables = NULL, Number_starting_name_file_set = 1,
-                         initial_name_dimensions = list(lon = NULL, lat = NULL, time = NULL,
-                                                        depth = NULL), n_cores = NULL, outfile = "log.txt")
+                        resolution = "day", all_time.period, dates, lonmin = -Inf,
+                        latmin = -Inf, lonmax = Inf, latmax = Inf, name_dimension = list(lon = "lon",
+                                                                                         lat = "lat", time = NULL, depth = NULL), max_depth = Inf,
+                        # lonmin_grid = NULL, latmin_grid = NULL, lonmax_grid = NULL, latmax_grid = NULL,
+                        vertical_variables = NULL, Number_starting_name_file_set = 1,
+                        initial_name_dimensions = list(lon = NULL, lat = NULL, time = NULL,
+                                                       depth = NULL), n_cores = NULL, outfile = "log.txt")
 {
   print(do.call("rbind", lapply(c("lon", "lat", "time", "depth"),
                                 function(c) {
@@ -438,9 +438,9 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
                                                                                                                    lat_cent = lati) %>% dplyr::select(-c(layer,
                                                                                                                                                          loni, lati))
                                 res_lat <- max(sort(lat)[-1] - sort(lat)[-length(lat)],
-                                                  na.rm = T) * (max(all_pixel.radius) + 0.5)
+                                               na.rm = T) * (max(all_pixel.radius) + 0.5)
                                 res_lon <- max(sort(lon)[-1] - sort(lon)[-length(lon)],
-                                                  na.rm = T) * (max(all_pixel.radius) + 0.5)
+                                               na.rm = T) * (max(all_pixel.radius) + 0.5)
 
                                 data <- data %>% dplyr::filter(lon_cent >= (lonmin - res_lon),
                                                                lon_cent <= (lonmax + res_lon), lat_cent >= (latmin - res_lat), lat_cent <=
@@ -541,8 +541,8 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
     llat <- lat
     # dlon <- median(sort(llon)[-1] - sort(llon)[-length(llon)])
     # dlat <- median(sort(llat)[-1] - sort(llat)[-length(llat)])
-    dlat <- res_lat
-    dlon <- res_lon
+    # dlat <- res_lat
+    # dlon <- res_lon
     # udatalon <- unique(data$lon_cent[data$lon_cent >= lonmin & data$lon_cent <= lonmax &
     #                                    data$lat_cent >= latmin & data$lat_cent <= latmax])
     cat("Parallel processing with", n_cores, "cores will be used. Check that computed can handle it.\n\n",
@@ -553,7 +553,7 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
       all_run <- foreach(dt = 1:nrow(dates), .packages = c("purrr",
                                                            "rlang", "dplyr", "timeDate", "ncdf4", "stringr",
                                                            "data.table", "collapse"), .noexport = ls()[!(ls() %in%
-                                                                                                           c("data", "llon", "llat", "dlon", "dlat", "max_depth",
+                                                                                                           c("data", "llon", "llat", "max_depth",
                                                                                                              "ncinfoi", "nc.path", "expr", "order_dim", #"udatalon",
                                                                                                              # "latmax_grid", "lonmax_grid", "latmin_grid", "lonmin_grid",
                                                                                                              "lonmin", "lonmax", "latmin", "latmax",
@@ -842,9 +842,8 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
               if (pred %in% vertical_variables) {
                 out <- matrix(data.var_ref, ncol = 1) %>% as.data.frame() %>%
                   cbind(dimensions) %>% dplyr::filter(lon >=
-                                                        (min(llon) - dlon) & lon <= (max(llon) +
-                                                                                       dlon) & lat >= (min(llat) - dlat) &
-                                                        lat <= (max(llat) + dlat)) %>%
+                                                        (min(llon)) & lon <= (max(llon)) & lat >= (min(llat)) &
+                                                        lat <= (max(llat))) %>%
                   dplyr::filter(d <= max_depth) %>%
                   dplyr::arrange(d)
 
@@ -863,9 +862,9 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
               else {
                 out <- matrix(data.var_ref, ncol = 1) %>% as.data.frame() %>%
                   cbind(dimensions) %>% dplyr::filter(lon >=
-                                                        (min(llon) - dlon) & lon <= (max(llon) +
-                                                                                       dlon) & lat >= (min(llat) - dlat) &
-                                                        lat <= (max(llat) + dlat)) %>%
+                                                        (min(llon)) & lon <= (max(llon)
+                                                        ) & lat >= (min(llat)) &
+                                                        lat <= (max(llat))) %>%
                   dplyr::group_by(lon, lat, t) %>%
                   dplyr::summarise(data.var_ref = dplyr::first(na.omit(V1)),
                                    d = 1) %>% dplyr::ungroup() %>%
@@ -959,15 +958,16 @@ extract_nc <- function (nc.path, list_variable, nc_files, all_pixel.radius,
             final <- list()
             for (pixel.radius in all_pixel.radius) {
               # final <- lapply(all_pixel.radius, function(pixel.radius) {
+              res_lat <- median(sort(lat)[-1] - sort(lat)[-length(lat)],
+                                na.rm = T) * (pixel.radius + 0.5)
+              res_lon <- median(sort(lon)[-1] - sort(lon)[-length(lon)],
+                                na.rm = T) * (pixel.radius + 0.5)
+
               if (pixel.radius != all_pixel.radius[1] &
                   !run_mean_SDspace) {
                 # return(NULL)
                 final[[match(pixel.radius, all_pixel.radius)]] <- NULL
               } else {
-                res_lat <- median(sort(lat)[-1] - sort(lat)[-length(lat)],
-                                  na.rm = T) * (pixel.radius + 0.5)
-                res_lon <- median(sort(lon)[-1] - sort(lon)[-length(lon)],
-                                  na.rm = T) * (pixel.radius + 0.5)
                 outM <- map_dfr(unique(data$lon_cent),
                                 function(l) {
                                   data.var_ref_t1l <- data.var_ref_t1[abs(l - data.var_ref_t1$lon) <= res_lon, ]
